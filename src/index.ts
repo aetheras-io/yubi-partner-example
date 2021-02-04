@@ -21,9 +21,9 @@ async function main() {
   app.use(bodyParser.json());
   app.use(cors());
 
-  app.get('/', (_req, res) => {
-    const post = db.get('posts').find({ id: 1 }).value();
-    res.json(post);
+  app.get('/', (_req, _res) => {
+    // const post = db.get('posts').find({ id: 1 }).value();
+    // res.json(post);
   });
 
   app.post('/login', (req, res) => {
@@ -33,12 +33,22 @@ async function main() {
   });
 
   app.post('/create-link', (req, res) => {
-    const { username, currency, userId } = req.body;
+    const { userId, currency } = req.body;
     const metadata = 'janken-game';
     const resp = {
       yubiLink: `${YUBI_PAYMENTS_BASE}?correlation=${userId}&currency=${currency}&metadata=${metadata}`,
     };
     res.json(resp);
+  });
+
+  app.post('/withdraw', (req, res) => {
+    const { userId, currency, value } = req.body;
+    const metadata = 'janken-game';
+    // const resp = {
+    //   yubiLink: `${YUBI_PAYMENTS_BASE}?correlation=${userId}&currency=${currency}&metadata=${metadata}`,
+    // };
+    // res.json(resp);
+    res.sendStatus(200);
   });
 
   app.post('/janken', (req, res) => {
