@@ -1,1 +1,3 @@
-# Yubi-partner-example
+# yubi-partner-example
+
+Yubi Integration Reference
