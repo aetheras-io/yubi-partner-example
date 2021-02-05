@@ -1,31 +1,32 @@
 import {
   JSONParse,
   IsPlayResponse,
-  IsUserState,
-  IsPaymentLinkResponse,
-  UserState,
+  IsLoginResponse,
+  LoginResponse,
   PlayResponse,
   JankenMove,
+  UserTuple,
 } from './types';
 
-const GAME_API = 'http://localhost:3000';
+const GAME_API = 'http://localhost:3001';
 
-export async function getUser(username: string): Promise<UserState> {
+export async function login(userId: string): Promise<LoginResponse> {
   const resp = await fetch(`${GAME_API}/login`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ username }),
+    body: JSON.stringify({ userId }),
   });
 
   if (!resp.ok) {
-    throw Error(`getUser failed: `);
+    throw Error(`login failed: `);
   }
 
   const payload = await resp.text();
-  const result = JSONParse(IsUserState)(payload);
+  console.log('login', payload);
+  const result = JSONParse(IsLoginResponse)(payload);
   switch (result.type) {
     case 'Ok':
       return result.value;
@@ -34,34 +35,23 @@ export async function getUser(username: string): Promise<UserState> {
   }
 }
 
-export async function getPaymentLink(
-  userId: string,
-  currency: string
-): Promise<string> {
-  const resp = await fetch(`${GAME_API}/create-link`, {
-    method: 'POST',
+export async function getAllUsers(): Promise<Array<UserTuple>> {
+  const resp = await fetch(`${GAME_API}/allUsers`, {
+    method: 'GET',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ userId, currency }),
   });
 
   if (!resp.ok) {
-    throw Error(`getPaymentLink failed: `);
+    throw Error(`getAllUsers failed: `);
   }
 
-  const payload = await resp.text();
-  const result = JSONParse(IsPaymentLinkResponse)(payload);
-  switch (result.type) {
-    case 'Ok':
-      return result.value.yubiLink;
-    case 'Err':
-      throw result.error;
-  }
+  return await resp.json();
 }
 
-export async function playJanken(move: JankenMove): Promise<PlayResponse> {
+export async function janken(move: JankenMove): Promise<PlayResponse> {
   const resp = await fetch(`${GAME_API}/janken`, {
     method: 'POST',
     headers: {

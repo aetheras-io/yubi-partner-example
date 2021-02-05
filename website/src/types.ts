@@ -15,10 +15,19 @@ export const JSONParse = <T>(guard: (o: any) => o is T) => (
 
 export type JankenMove = 'rock' | 'paper' | 'scissors';
 export type JankenResult = 'win' | 'lose' | 'draw';
+export type UserTuple = {
+  id: string;
+  username: string;
+};
 
-export interface UserState {}
+export interface UserState {
+  id: string;
+  username: string;
+  balance: number;
+}
 
-export interface PaymentLinkResponse {
+export interface LoginResponse {
+  user: UserState;
   yubiLink: string;
 }
 
@@ -32,13 +41,14 @@ export function IsUserState(o: any): o is UserState {
   return (
     o !== null &&
     typeof o.id === 'string' &&
-    typeof o.firstname === 'number' &&
+    typeof o.username === 'string' &&
     typeof o.balance === 'number'
   );
 }
 
-export function IsPaymentLinkResponse(o: any): o is PaymentLinkResponse {
-  return o !== null && typeof o.yubiLink === 'string';
+export function IsLoginResponse(o: any): o is LoginResponse {
+  console.log('userstateok', IsUserState(o.user));
+  return o !== null && IsUserState(o.user) && typeof o.yubiLink === 'string';
 }
 
 export function IsPlayResponse(o: any): o is PlayResponse {

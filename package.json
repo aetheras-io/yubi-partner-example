@@ -10,7 +10,7 @@
   "keywords": [],
   "scripts": {
     "start": "node build/main/index.js",
-    "dev-web": "cd website && PORT=3001 yarn start",
+    "dev-web": "cd website && PORT=3002 yarn start",
     "dev": "concurrently --kill-others-on-fail \"yarn watch:build\" \"nodemon -q --watch build build/main/index.js\" \"yarn dev-web\"",
     "build": "run-p build:*",
     "build:main": "tsc -p tsconfig.json",
@@ -50,7 +50,8 @@
     "cors": "^2.8.5",
     "express": "^4.17.1",
     "lodash-id": "^0.14.0",
-    "lowdb": "^1.0.0"
+    "lowdb": "^1.0.0",
+    "mkdirp": "^1.0.4"
   },
   "devDependencies": {
     "@ava/typescript": "^1.1.1",
