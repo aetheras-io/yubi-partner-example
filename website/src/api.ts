@@ -25,7 +25,6 @@ export async function login(userId: string): Promise<LoginResponse> {
   }
 
   const payload = await resp.text();
-  console.log('login', payload);
   const result = JSONParse(IsLoginResponse)(payload);
   switch (result.type) {
     case 'Ok':
@@ -51,14 +50,17 @@ export async function getAllUsers(): Promise<Array<UserTuple>> {
   return await resp.json();
 }
 
-export async function janken(move: JankenMove): Promise<PlayResponse> {
+export async function janken(
+  userId: string,
+  move: JankenMove
+): Promise<PlayResponse> {
   const resp = await fetch(`${GAME_API}/janken`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ move }),
+    body: JSON.stringify({ userId, move }),
   });
 
   if (!resp.ok) {
@@ -92,4 +94,8 @@ export async function withdraw(
   if (!resp.ok) {
     throw Error(`playJanken failed: `);
   }
+}
+
+export function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

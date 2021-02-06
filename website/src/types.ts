@@ -32,6 +32,7 @@ export interface LoginResponse {
 }
 
 export interface PlayResponse {
+  remoteMove: JankenMove;
   result: JankenResult;
   userState: UserState;
   value: number;
@@ -47,16 +48,19 @@ export function IsUserState(o: any): o is UserState {
 }
 
 export function IsLoginResponse(o: any): o is LoginResponse {
-  console.log('userstateok', IsUserState(o.user));
   return o !== null && IsUserState(o.user) && typeof o.yubiLink === 'string';
 }
 
 export function IsPlayResponse(o: any): o is PlayResponse {
   return (
     o !== null &&
+    typeof o.remoteMove === 'string' &&
+    (o.remoteMove === 'rock' ||
+      o.remoteMove === 'paper' ||
+      o.remoteMove === 'scissors') &&
     typeof o.result === 'string' &&
     (o.result === 'win' || o.result === 'lose' || o.result === 'draw') &&
-    IsUserState(o.result) &&
+    IsUserState(o.userState) &&
     typeof o.value === 'number'
   );
 }

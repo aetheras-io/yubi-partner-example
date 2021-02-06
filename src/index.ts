@@ -5,7 +5,7 @@ import FileSync from 'lowdb/adapters/FileSync';
 import lodashId from 'lodash-id';
 import cors from 'cors';
 import axios from 'axios';
-import { UserState } from './types';
+import { UserState, JankenMove, JankenResult } from './types';
 import mkdirp from 'mkdirp';
 
 const YUBI_PAYMENTS_BASE = 'http://localhost:3000/payments/partner';
@@ -30,7 +30,6 @@ async function main() {
   app.post('/login', (req, res) => {
     const { userId } = req.body;
     const user = db.get('users').getById(userId).value();
-    console.log(user);
     res.json({
       user,
       yubiLink: createYubiPaymentLink(user.id, 'USDT'),
@@ -41,27 +40,55 @@ async function main() {
     const users = db
       .get('users')
       .value()
-      .map((u) => ({ username: u.username, id: u.id }));
-    console.log(users);
+      .map((u: UserState) => ({ username: u.username, id: u.id }));
     res.json(users);
   });
 
-  app.post('/withdraw', (req, res) => {
-    const { userId, currency, value } = req.body;
-    const metadata = {
-      gameType: 'janken',
-    };
-    //use idempotent api call to yubi
-    res.sendStatus(200);
-  });
+  //app.post('/withdraw', (req, res) => {
+  //  const { userId, currency, value } = req.body;
+  //  const metadata = {
+  //    gameType: 'janken',
+  //  };
+  //  //use idempotent api call to yubi
+  //  res.sendStatus(200);
+  //});
 
+  const wager = 10;
+  const selections: Array<JankenMove> = ['rock', 'paper', 'scissors'];
   app.post('/janken', (req, res) => {
-    const { move } = req.body;
-    if (move !== 'rock' || move !== 'paper' || move !== 'scissors') {
+    const { userId, move } = req.body;
+    if (move !== 'rock' && move !== 'paper' && move !== 'scissors') {
       console.log(`invalid move: ${move}`);
     }
-    console.log(req.body);
-    res.json(req.body);
+    const collection = db.get('users');
+    const user = collection.getById(userId).value();
+
+    const cpuMove: JankenMove =
+      selections[Math.floor(Math.random() * selections.length)];
+
+    let result: JankenResult;
+    if (move === cpuMove) {
+      result = 'draw';
+    } else if (
+      (move === 'rock' && cpuMove === 'scissors') ||
+      (move === 'scissors' && cpuMove === 'paper') ||
+      (move === 'paper' && cpuMove === 'rock')
+    ) {
+      result = 'win';
+      user.balance += wager;
+    } else {
+      result = 'lose';
+      user.balance -= wager;
+    }
+
+    collection.upsert(user);
+    console.log(user);
+    res.json({
+      remoteMove: cpuMove,
+      result: result,
+      userState: user,
+      value: wager,
+    });
   });
 
   app.get('/healthz', (_req, res) => {
@@ -85,7 +112,7 @@ function createYubiPaymentLink(userId: string, currency: string): string {
   const metadata = {
     gameType: 'janken',
     platform: 'PlatformABC',
-    time: new Date(),
+    time: new Date().getTime(),
   };
   const metadataURI = encodeMetadataToKV(metadata);
   return `${YUBI_PAYMENTS_BASE}?correlation=${userId}&currency=${currency}&partner=${YUBI_PARTNER_ID}&${metadataURI}}`;
@@ -120,10 +147,10 @@ async function createDatabase() {
     db.defaults({ initialized: true, users: [], pendingTx: [] }).write();
 
     const usersCollection = db.get('users');
-    usersCollection.insert({ username: 'Goku', balance: 0 }).write();
-    usersCollection.insert({ username: 'Yusuke', balance: 0 }).write();
-    usersCollection.insert({ username: 'Gon', balance: 0 }).write();
-    usersCollection.insert({ username: 'Naruto', balance: 0 }).write();
+    usersCollection.insert({ username: 'Goku', balance: 1000 }).write();
+    usersCollection.insert({ username: 'Yusuke', balance: 1000 }).write();
+    usersCollection.insert({ username: 'Gon', balance: 1000 }).write();
+    usersCollection.insert({ username: 'Naruto', balance: 1000 }).write();
   }
 
   return db;

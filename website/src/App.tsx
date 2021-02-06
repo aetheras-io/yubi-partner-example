@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import useInterval from './hooks';
 import './App.css';
+import Janken from './janken';
 import * as API from './api';
 import { UserState, UserTuple } from './types';
+import useInterval from './hooks';
 
 type State = {
   user: UserState;
@@ -20,13 +21,54 @@ function App() {
     state ? 1000 : null
   );
 
+  function setUser(user: UserState) {
+    setState((prev) => (prev ? { ...prev, user } : prev));
+  }
+
   return (
     <div className="App">
       {state ? (
-        <Janken user={state.user} yubiLink={state.yubiLink} />
+        <div>
+          <UserMenu user={state.user} yubiLink={state.yubiLink} />
+          <Janken userId={state.user.id} updateUser={setUser} />
+        </div>
       ) : (
         <UserSelection setUser={setState} />
       )}
+    </div>
+  );
+}
+
+function UserMenu(props: { user: UserState; yubiLink: string }) {
+  const { user, yubiLink } = props;
+
+  if (!user) {
+    return null;
+  }
+
+  return (
+    <div>
+      <p>
+        [{user.username}] Credits: {user.balance} USDT{' '}
+        <button
+          title={yubiLink}
+          onClick={() => {
+            openInNewTab(yubiLink);
+          }}
+        >
+          Deposit
+        </button>
+        <button
+          title={yubiLink}
+          onClick={() => {
+            openInNewTab(yubiLink);
+          }}
+        >
+          Withdraw
+        </button>
+      </p>
+
+      {/* <p> Yubi Link: {yubiLink}</p> */}
     </div>
   );
 }
@@ -48,7 +90,6 @@ function UserSelection(props: { setUser: (state: State) => void }) {
     (async () => {
       if (!state.allUsers) {
         let users = await API.getAllUsers();
-        console.log('all users: ', users);
         setState((prev) => ({ ...prev, allUsers: users }));
       }
     })();
@@ -57,9 +98,8 @@ function UserSelection(props: { setUser: (state: State) => void }) {
   useEffect(() => {
     (async () => {
       if (state.selectedUser) {
-        let userState = await API.login(state.selectedUser);
-        console.log('userState: ', userState);
-        setUser(userState);
+        let resp = await API.login(state.selectedUser);
+        setUser(resp);
       }
     })();
   }, [state, setUser]);
@@ -72,7 +112,6 @@ function UserSelection(props: { setUser: (state: State) => void }) {
     return <h1>Error: No users available</h1>;
   }
 
-  console.log(state.allUsers);
   let buttons = state.allUsers.map((u, idx) => (
     <button
       key={`username_${idx}`}
@@ -90,15 +129,11 @@ function UserSelection(props: { setUser: (state: State) => void }) {
   );
 }
 
-function Janken(props: { user: UserState; yubiLink: string }) {
-  const { user } = props;
-  return (
-    <div>
-      <h1>Janken</h1>
-      <p>User: {user.username}</p>
-      <p>USDT Credits: {user.balance}</p>
-    </div>
-  );
-}
+const openInNewTab = (url: string) => {
+  const newWindow = window.open(url, '_blank', 'noopener,noreferrer');
+  if (newWindow) {
+    newWindow.opener = null;
+  }
+};
 
 export default App;
