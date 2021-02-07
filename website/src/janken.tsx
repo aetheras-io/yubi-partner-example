@@ -89,7 +89,7 @@ export default function Janken({ userId, updateUser }: Props) {
           <button
             className="playBtn"
             onClick={() => {
-              onMoveClick('rock');
+              onMoveClick('scissors');
             }}
           >
             scissors
@@ -111,14 +111,15 @@ export default function Janken({ userId, updateUser }: Props) {
       }
       return (
         <>
-          <h2>{res}</h2>
           <button
+            className="playBtn"
             onClick={() => {
               setState(initialState);
             }}
           >
             Play Again
           </button>
+          <h2>{res}</h2>
         </>
       );
     }

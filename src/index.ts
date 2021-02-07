@@ -7,11 +7,19 @@ import cors from 'cors';
 import axios from 'axios';
 import { UserState, JankenMove, JankenResult } from './types';
 import mkdirp from 'mkdirp';
+import { v4 as uuidv4 } from 'uuid';
 
 const YUBI_PAYMENTS_BASE = 'http://localhost:3000/payments/partner';
 const YUBI_PARTNER_BACKEND = 'http://localhost:3030';
 const YUBI_API_KEY = 'supersafekey';
-const YUBI_PARTNER_ID = 'uuid_newv4';
+const YUBI_PARTNER_ID = '809cf0ea-6be4-41b6-ab63-2207faf2e253';
+
+const httpClient = axios.create({
+  baseURL: 'http://localhost:3030',
+  headers: {
+    'X-API-KEY': YUBI_API_KEY,
+  },
+});
 
 async function main() {
   const app = express();
@@ -21,11 +29,6 @@ async function main() {
   //middleware
   app.use(bodyParser.json());
   app.use(cors());
-
-  app.get('/', (_req, _res) => {
-    // const post = db.get('posts').find({ id: 1 }).value();
-    // res.json(post);
-  });
 
   app.post('/login', (req, res) => {
     const { userId } = req.body;
@@ -44,14 +47,16 @@ async function main() {
     res.json(users);
   });
 
-  //app.post('/withdraw', (req, res) => {
-  //  const { userId, currency, value } = req.body;
-  //  const metadata = {
-  //    gameType: 'janken',
-  //  };
-  //  //use idempotent api call to yubi
-  //  res.sendStatus(200);
-  //});
+  app.post('/withdraw', (req, res) => {
+    const { userId, currency, value } = req.body;
+    const metadata = {
+      gameType: 'janken',
+      platform: 'PlatformABC',
+      time: new Date().getTime(),
+    };
+    //use idempotent api call to yubi
+    res.sendStatus(200);
+  });
 
   const wager = 10;
   const selections: Array<JankenMove> = ['rock', 'paper', 'scissors'];
@@ -62,7 +67,6 @@ async function main() {
     }
     const collection = db.get('users');
     const user = collection.getById(userId).value();
-
     const cpuMove: JankenMove =
       selections[Math.floor(Math.random() * selections.length)];
 
@@ -105,6 +109,52 @@ async function main() {
 main()
   .then((_res) => {})
   .catch(console.error);
+
+// Yubi API guarantees a request remains idempotent for 24 hours if the same idempotency key
+// is given for a request
+async function idempotentRequest(
+  db,
+  url: string,
+  params: object
+): Promise<boolean> {
+  let idempotency_key = uuidv4();
+
+  const pending = db.get('pendingTx');
+  pending.insert({ id: idempotency_key, url, params }).write();
+
+  let retries = 5;
+  while (retries > 0) {
+    try {
+      let resp = await httpClient.post(url, params);
+      if (resp.status === 202) {
+        pending.removeById(idempotency_key);
+        return true;
+      }
+    } catch (e) {
+      if (e.response) {
+        // request failed due to bad request or server error, fail now
+        pending.removeById(idempotency_key);
+        return false;
+      } else if (e.request) {
+        // request failed due to timeout.  Could be our network or remote's network or both.
+        // it is possible the request arrived or did not arrive, this is retryable
+      } else {
+        // anything else
+      }
+    }
+
+    // we errored
+    retries -= 1;
+
+    // be friendly to the remote api
+    await delay(1000);
+  }
+  return false;
+}
+
+export function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 // This can be created on the front end but it is easier to make changes
 // if the URL is created on the server side
@@ -157,12 +207,6 @@ async function createDatabase() {
 }
 
 function stateUpdateLoop(_db) {
-  const client = axios.create({
-    baseURL: 'http://localhost:3030',
-    headers: {
-      'X-API-KEY': YUBI_API_KEY,
-    },
-  });
   // setInterval(async () => {
   //   let res = await client.get('');
   //   console.log(res);

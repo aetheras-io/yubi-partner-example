@@ -58,14 +58,7 @@ function UserMenu(props: { user: UserState; yubiLink: string }) {
         >
           Deposit
         </button>
-        <button
-          title={yubiLink}
-          onClick={() => {
-            openInNewTab(yubiLink);
-          }}
-        >
-          Withdraw
-        </button>
+        <button onClick={() => {}}>Withdraw</button>
       </p>
 
       {/* <p> Yubi Link: {yubiLink}</p> */}
