@@ -62,46 +62,16 @@ async function main() {
       return;
     }
 
-    const params = {
-      currency,
-      value,
-      metadata: jankenMetadata(userId),
-    };
-
-    async function idReq(db, yubiAccount, currency, value, metadata) {
-      const user = userCollection.getById(userId).value();
-      const idempotency_key = uuidv4();
-      const params = {
-        yubiAccount,
-        currency,
-        value,
-        metadata,
-      };
-
-      // deduct user funds
-      console.log(`${user.username} withdrawal balance pre: ${user.balance}`);
-      user.balance -= value;
-      console.log(`${user.username} withdrawal balance after: ${user.balance}`);
-      const txCollection = db.get('pendingTx');
-      const tx = txCollection
-        .insert({
-          id: idempotency_key,
-          url: `${YUBI_PARTNER_BACKEND}/partners/userWithdrawal`,
-          params,
-        })
-        .write();
-      // IMPORTANT, User.balance and new txCollection item must be a transactional write in the
-      // database.  Lowdb is awkward, because `user.balance -= value`` doesn't get stored on disk until the `txCollection.write()` call
-    }
-
-    let accepted = await idempotentRequest(tx, txCollection);
+    let accepted = await idempotentWithdrawal(
+      db,
+      userId,
+      'some-thing',
+      'USDT',
+      50,
+      jankenMetadata(userId)
+    );
 
     if (!accepted) {
-      user.balance += value;
-      console.log(
-        `${user.username} withdrawal balance refund: ${user.balance}`
-      );
-      await userCollection.write();
       res.sendStatus(500);
     } else {
       res.sendStatus(202);
@@ -163,9 +133,9 @@ async function main() {
   });
 
   app.get('/tx', (_req, res) => {
-    let user = db.get('users[0]').value();
-    user.balance += 100;
-    db.get('pendingTx').insert({ test: 'hello' }).write();
+    const users = db.get('users');
+    const requestCache = db.get('requestCache').value();
+    console.log(requestCache);
 
     res.sendStatus(200);
   });
@@ -181,23 +151,61 @@ main()
   .then((_res) => {})
   .catch(console.error);
 
+// In case of a crash, we get all of the requests without a requestId (due to missing the response
+// from the Yubi API server) and retry the request until we receive a 202 accepted
 async function recover(db) {
-  const users = db.get('users');
-  const pendingTxs = db.get('pendingTx').filter({ txId: null }).value();
-  console.log(pendingTxs);
-  // for (var tx in pendingTxs) {
-  //   const accepted = await idempotentRequest(db, tx.url, tx.params);
-  //   if (!accepted) {
-  //     // this was a bad request but we crashed before we could react, need to undo the debit
-  //     const user = users.getById(params.correlationId);
-  //     user.balance += tx.params.value;
-  //   }
-  // }
+  const requestCache = db
+    .get('requestCache')
+    .filter({ requestId: undefined })
+    .value();
+
+  for (var tx in requestCache) {
+    const accepted = await retryRequest(db, tx);
+    if (!accepted) {
+      console.log('tx');
+    }
+  }
+  console.log(requestCache);
 }
 
 // Yubi API guarantees a request remains idempotent for 24 hours if the same idempotency key
 // is given for a request
-async function idempotentWithdrawal(db): Promise<boolean> {
+async function idempotentWithdrawal(
+  db,
+  userId: string,
+  yubiAccount: string,
+  currency: string,
+  value: number,
+  metadata: any
+) {
+  const user = db.get('users').getById(userId).value();
+  const requestCache = db.get('requestCache');
+  const idempotency_key = uuidv4();
+  const params = {
+    yubiAccount,
+    currency,
+    value,
+    metadata,
+  };
+
+  // IMPORTANT, User.balance and idempotent requests item must be a transactional write in the
+  // database.  Lowdb is awkward, because `user.balance -= value`` doesn't get stored on disk
+  // until the last `write()` call
+  user.balance -= value;
+  const tx = requestCache
+    .insert({
+      id: idempotency_key,
+      url: `${YUBI_PARTNER_BACKEND}/partners/userWithdrawal`,
+      params,
+    })
+    .write();
+
+  return retryRequest(db, tx);
+}
+
+async function retryRequest(db, tx): Promise<boolean> {
+  const requestCache = db.get('requestCache');
+
   let retries = 5;
   while (retries > 0) {
     console.log(`idempotent request: ${tx.url} ---- ${tx.params}`);
@@ -208,34 +216,43 @@ async function idempotentWithdrawal(db): Promise<boolean> {
       if (resp.status === 202) {
         //store the withdrawal response id from YUBI
         //when the corresponding event comes back from YUBI, we can delete the entry based on the
-        //transaciton id
+        // yubi request id.  This lets us know for sure if a response was received
         tx.yubiRequestId = resp.data.id;
-        await collection.write();
+        await requestCache.write();
         return true;
       }
     } catch (e) {
       if (e.response) {
         // request failed due to bad request or server error.  Abort
-        console.log('Idempotent Bad Request, removing pending:', tx.Id);
-        await collection.removeById(tx.Id).write();
+        console.log(
+          'Idempotent Bad Request, removing cached tx and refunding user:',
+          tx.Id
+        );
+        // #IMPORTANT the balance update and requestCache item must be removed together in
+        // transaction!
+        let user = db.get('users').getById(tx.params.userId);
+        user.balance += tx.value;
+        await requestCache.removeById(tx.Id).write();
         return false;
       } else if (e.request) {
-        console.log('Idempotent Timed Out, retrying:', tx.Id);
         // request failed due to timeout.  Could be our network or remote's network or both.
         // it is possible the request arrived or did not arrive, this is retryable
+        console.log('Idempotent Timed Out, retrying:', e.request);
+        console.log(e.response);
       } else {
-        console.log('Idempotent Request Error:', tx.Id);
         // this is code level errors like null objects.  In this case, it should be a bad request
+        console.log('Idempotent Request Error:', tx.Id);
+        let user = db.get('users').getById(tx.params.userId);
+        user.balance += tx.value;
+        await requestCache.removeById(tx.Id).write();
         return false;
       }
     }
-
-    // we errored
-    retries -= 1;
-
-    // be friendly to the remote api
-    await delay(1000);
   }
+
+  // be friendly to the remote api
+  await delay(1000);
+  retries -= 1;
   return false;
 }
 
@@ -285,7 +302,7 @@ async function createDatabase() {
   if (!db.get('initialized').value()) {
     console.log('initializing blank database');
 
-    db.defaults({ initialized: true, users: [], pendingTx: [] }).write();
+    db.defaults({ initialized: true, users: [], requestCache: [] }).write();
 
     const usersCollection = db.get('users');
     usersCollection.insert({ username: 'Goku', balance: 1000 }).write();
