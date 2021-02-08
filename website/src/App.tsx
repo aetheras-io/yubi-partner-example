@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './App.css';
 import Janken from './janken';
 import * as API from './api';
@@ -7,7 +7,6 @@ import useInterval from './hooks';
 
 type State = {
   user: UserState;
-  yubiLink: string;
 };
 
 function App() {
@@ -15,50 +14,79 @@ function App() {
 
   // keep state updated
   useInterval(
-    () => {
-      console.log('tick');
+    async () => {
+      if (state?.user) {
+        let resp = await API.login(state?.user.id);
+        setState((prev) => {
+          return prev ? { ...prev, user: resp } : prev;
+        });
+      }
     },
-    state ? 1000 : null
+    state?.user ? 2000 : null
   );
 
   function setUser(user: UserState) {
-    setState((prev) => (prev ? { ...prev, user } : prev));
+    console.log('set user');
+    setState((prev) => (prev ? { ...prev, user } : { user }));
   }
 
   return (
     <div className="App">
       {state ? (
         <div>
-          <UserMenu user={state.user} yubiLink={state.yubiLink} />
+          <UserMenu user={state.user} />
           <Janken userId={state.user.id} updateUser={setUser} />
         </div>
       ) : (
-        <UserSelection setUser={setState} />
+        <UserSelection setUser={setUser} />
       )}
     </div>
   );
 }
 
-function UserMenu(props: { user: UserState; yubiLink: string }) {
-  const { user, yubiLink } = props;
+type WithdrawState = 'sending' | 'idle';
+function UserMenu(props: { user: UserState }) {
+  const { user } = props;
+  const [state, setState] = useState<WithdrawState>('idle');
+
+  const sendWithdrawal = useCallback(async () => {
+    if (state === 'idle') {
+      setState('sending');
+      try {
+        await API.delay(1000);
+        await API.withdraw(user.id, 'USDT', 50);
+        alert('Withdrawal Request of $500 USDT accepted');
+        setState('idle');
+      } catch (e) {
+        setState('idle');
+      }
+    } else {
+      console.log('already withdrawing');
+    }
+  }, [user, state, setState]);
 
   if (!user) {
     return null;
   }
+
+  const pendingRequest = state !== 'idle';
 
   return (
     <div>
       <p>
         [{user.username}] Credits: {user.balance} USDT{' '}
         <button
-          title={yubiLink}
-          onClick={() => {
+          onClick={async () => {
+            const yubiLink = await API.getDepositLink(user.id);
+            console.log(yubiLink);
             openInNewTab(yubiLink);
           }}
         >
           Deposit
         </button>
-        <button onClick={() => {}}>Withdraw</button>
+        <button disabled={pendingRequest} onClick={sendWithdrawal}>
+          Withdraw(50)
+        </button>
       </p>
 
       {/* <p> Yubi Link: {yubiLink}</p> */}
@@ -71,7 +99,7 @@ type SelectionState = {
   allUsers?: Array<UserTuple>;
 };
 
-function UserSelection(props: { setUser: (state: State) => void }) {
+function UserSelection(props: { setUser: (user: UserState) => void }) {
   const { setUser } = props;
   const [state, setState] = useState<SelectionState>({
     selectedUser: undefined,

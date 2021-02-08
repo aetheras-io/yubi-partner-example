@@ -32,7 +32,7 @@ export default function Janken({ userId, updateUser }: Props) {
       setState((prev) => ({ ...prev, p1Move: move, p1MoveReady: false }));
       try {
         let resp = await API.janken(userId, move);
-        await API.delay(2000);
+        await API.delay(1000);
         setState((prev) => ({
           ...prev,
           p2Move: resp.remoteMove,
@@ -42,15 +42,6 @@ export default function Janken({ userId, updateUser }: Props) {
           value: resp.value,
         }));
         updateUser(resp.userState);
-
-        // await API.delay(2000);
-        // setState((prev) => ({
-        //   ...prev,
-        //   p2Move: 'scissors',
-        //   p1MoveReady: true,
-        //   p2MoveReady: true,
-        //   result: 'draw',
-        // }));
       } catch (e) {
         alert('something went wrong...' + e.message);
         setState(initialState);

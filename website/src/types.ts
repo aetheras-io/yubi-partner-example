@@ -26,11 +26,6 @@ export interface UserState {
   balance: number;
 }
 
-export interface LoginResponse {
-  user: UserState;
-  yubiLink: string;
-}
-
 export interface PlayResponse {
   remoteMove: JankenMove;
   result: JankenResult;
@@ -45,10 +40,6 @@ export function IsUserState(o: any): o is UserState {
     typeof o.username === 'string' &&
     typeof o.balance === 'number'
   );
-}
-
-export function IsLoginResponse(o: any): o is LoginResponse {
-  return o !== null && IsUserState(o.user) && typeof o.yubiLink === 'string';
 }
 
 export function IsPlayResponse(o: any): o is PlayResponse {

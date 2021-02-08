@@ -1,16 +1,16 @@
 import {
   JSONParse,
   IsPlayResponse,
-  IsLoginResponse,
-  LoginResponse,
   PlayResponse,
   JankenMove,
   UserTuple,
+  IsUserState,
+  UserState,
 } from './types';
 
 const GAME_API = 'http://localhost:3001';
 
-export async function login(userId: string): Promise<LoginResponse> {
+export async function login(userId: string): Promise<UserState> {
   const resp = await fetch(`${GAME_API}/login`, {
     method: 'POST',
     headers: {
@@ -25,7 +25,7 @@ export async function login(userId: string): Promise<LoginResponse> {
   }
 
   const payload = await resp.text();
-  const result = JSONParse(IsLoginResponse)(payload);
+  const result = JSONParse(IsUserState)(payload);
   switch (result.type) {
     case 'Ok':
       return result.value;
@@ -92,8 +92,26 @@ export async function withdraw(
   });
 
   if (!resp.ok) {
-    throw Error(`playJanken failed: `);
+    console.log(await resp.text());
+    throw Error(`withdraw failed: `);
   }
+}
+
+export async function getDepositLink(userId: string): Promise<string> {
+  const resp = await fetch(`${GAME_API}/depositLink`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ userId }),
+  });
+
+  if (!resp.ok) {
+    throw Error(`withdraw failed: `);
+  }
+
+  return resp.json();
 }
 
 export function delay(ms: number) {
