@@ -26,7 +26,6 @@ function App() {
   );
 
   function setUser(user: UserState) {
-    console.log('set user');
     setState((prev) => (prev ? { ...prev, user } : { user }));
   }
 
