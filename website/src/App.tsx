@@ -16,9 +16,9 @@ function App() {
   useInterval(
     async () => {
       if (state?.user) {
-        let resp = await API.login(state?.user.id);
+        let user = await API.login(state?.user.id);
         setState((prev) => {
-          return prev ? { ...prev, user: resp } : prev;
+          return prev ? { ...prev, user } : prev;
         });
       }
     },
@@ -35,6 +35,7 @@ function App() {
         <div>
           <UserMenu user={state.user} />
           <Janken userId={state.user.id} updateUser={setUser} />
+          <Transactions user={state.user} />
         </div>
       ) : (
         <UserSelection setUser={setUser} />
@@ -44,6 +45,8 @@ function App() {
 }
 
 type WithdrawState = 'sending' | 'idle';
+type TxState = { txns: Array<any>; state: 'sending' | 'idle' };
+
 function UserMenu(props: { user: UserState }) {
   const { user } = props;
   const [state, setState] = useState<WithdrawState>('idle');
@@ -53,14 +56,16 @@ function UserMenu(props: { user: UserState }) {
       setState('sending');
       try {
         await API.delay(1000);
-        await API.withdraw(user.id, 'USDT', 50);
-        alert('Withdrawal Request of $500 USDT accepted');
+        await API.withdraw(user.id, 'Tether', 50);
+        alert('Withdrawal Request of $50 USDT accepted');
         setState('idle');
       } catch (e) {
+        console.log(e);
+        alert('Withdrawal failed:' + e.message);
         setState('idle');
       }
     } else {
-      console.log('already withdrawing');
+      console.log('withdraw request in flight');
     }
   }, [user, state, setState]);
 
@@ -69,7 +74,6 @@ function UserMenu(props: { user: UserState }) {
   }
 
   const pendingRequest = state !== 'idle';
-
   return (
     <div>
       <p>
@@ -87,9 +91,52 @@ function UserMenu(props: { user: UserState }) {
           Withdraw(50)
         </button>
       </p>
-
-      {/* <p> Yubi Link: {yubiLink}</p> */}
     </div>
+  );
+}
+
+function Transactions(props: { user: UserState }) {
+  const { user } = props;
+  const [txState, setTxState] = useState<TxState>({
+    txns: [],
+    state: 'idle',
+  });
+
+  useEffect(() => {
+    (async () => {
+      setTxState((prev) => ({ ...prev, state: 'sending' }));
+      let txns = await API.getTransactions(user.id);
+      setTxState((prev) => ({ ...prev, state: 'idle', txns }));
+    })();
+  }, [user.id, setTxState]);
+
+  // keep state updated
+  useInterval(async () => {
+    if (user.id) {
+      setTxState((prev) => ({ ...prev, state: 'sending' }));
+      let txns = await API.getTransactions(user.id);
+      setTxState((prev) => ({ ...prev, state: 'idle', txns }));
+    }
+  }, 2000);
+
+  const rows = txState.txns.map((tx, i) => (
+    <tr key={`tx-${i}`}>
+      <td>{tx.kind}</td>
+      <td>{tx.amount.kind}</td>
+      <td>{tx.amount.value}</td>
+    </tr>
+  ));
+  return (
+    <table style={{ marginLeft: 'auto', marginRight: 'auto' }}>
+      <tbody>
+        <tr>
+          <th>Action</th>
+          <th>Currency</th>
+          <th>Value</th>
+        </tr>
+        {rows}
+      </tbody>
+    </table>
   );
 }
 

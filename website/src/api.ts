@@ -92,9 +92,25 @@ export async function withdraw(
   });
 
   if (!resp.ok) {
-    console.log(await resp.text());
-    throw Error(`withdraw failed: `);
+    throw Error(`${await resp.text()}`);
   }
+}
+
+export async function getTransactions(userId: string): Promise<Array<any>> {
+  const resp = await fetch(`${GAME_API}/transactions`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ userId }),
+  });
+
+  if (!resp.ok) {
+    throw Error(`${await resp.text()}`);
+  }
+
+  return resp.json();
 }
 
 export async function getDepositLink(userId: string): Promise<string> {
@@ -108,7 +124,7 @@ export async function getDepositLink(userId: string): Promise<string> {
   });
 
   if (!resp.ok) {
-    throw Error(`withdraw failed: `);
+    throw Error(`${await resp.text()}`);
   }
 
   return resp.json();

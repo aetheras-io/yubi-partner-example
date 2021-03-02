@@ -11,7 +11,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 const PLATFORM = 'ABC Corp. Ltd';
 const YUBI_PAYMENTS_BASE = 'http://localhost:3000/payments/partner';
-const YUBI_PARTNER_BACKEND = 'http://tonywu:3030';
+const YUBI_PARTNER_BACKEND = 'http://localhost:3030';
 const YUBI_API_KEY = 'supersafekey';
 const YUBI_PARTNER_ID = '00000000-0000-0000-0001-000000000001';
 
@@ -71,12 +71,13 @@ async function main() {
     const request = {
       id: idempotencyKey,
       userId,
+      yubiRequestId: undefined,
       url: `${YUBI_PARTNER_BACKEND}/partners/userWithdrawal`,
       params: {
         user: user.yubiAccount,
         amount: {
           kind: currency,
-          value: String(currency),
+          value: String(value),
         },
         idempotencyKey,
         metadata: jankenMetadata(userId),
@@ -96,9 +97,11 @@ async function main() {
   app.post('/janken', (req, res) => {
     const { userId, move } = req.body;
     if (move !== 'rock' && move !== 'paper' && move !== 'scissors') {
-      console.log(`invalid move: ${move}`);
+      res.status(500).send('invalid move');
     }
+
     const collection = db.get('users');
+    const txCollection = db.get('transactions').value();
     const user = collection.getById(userId).value();
     const cpuMove: JankenMove =
       selections[Math.floor(Math.random() * selections.length)];
@@ -113,13 +116,25 @@ async function main() {
     ) {
       result = 'win';
       user.balance += wager;
+      txCollection.push({
+        userId: user.id,
+        kind: 'Win(Janken)',
+        amount: { kind: 'Tether', value: String(wager) },
+        at: new Date().toString(),
+      });
     } else {
       result = 'lose';
       user.balance -= wager;
+      txCollection.push({
+        userId: user.id,
+        kind: 'Loss(Janken)',
+        amount: { kind: 'Tether', value: String(wager) },
+        at: new Date().toString(),
+      });
     }
 
     db.write();
-    console.log(user);
+
     res.json({
       remoteMove: cpuMove,
       result: result,
@@ -136,7 +151,6 @@ async function main() {
       return;
     }
 
-    console.log(createYubiPaymentLink(userId, 'Tether'));
     res.json(createYubiPaymentLink(userId, 'Tether'));
   });
 
@@ -144,6 +158,11 @@ async function main() {
     const { userId } = req.body;
     const txns = db.get('transactions').filter({ userId }).value();
     res.json(txns);
+  });
+
+  app.get('/state', (_req, res) => {
+    res.header('Content-Type', 'application/json');
+    res.send(JSON.stringify(db, null, 4));
   });
 
   app.get('/healthz', (_req, res) => {
@@ -166,10 +185,11 @@ main()
 async function recover(db) {
   const requestCache: Array<WalletWithdrawRequest> = db
     .get('requestCache')
-    .filter({ requestId: undefined })
+    .filter({ yubiRequestId: undefined })
     .value();
 
   for (var i = 0; i < requestCache.length; i++) {
+    console.log(`recovering request: ${requestCache[i]}`);
     const ok = await idempotentWithdrawal(db, requestCache[i]);
     if (!ok) {
       console.log(
@@ -184,7 +204,7 @@ type WalletWithdrawRequest = {
   id: string;
   userId: string;
   url: string;
-  yubiRequestId?: string;
+  yubiRequestId: string | undefined;
   params: {
     user: string;
     amount: {
@@ -205,7 +225,9 @@ async function idempotentWithdrawal(db, request: WalletWithdrawRequest) {
   // #IMPORTANT, User.balance and idempotent requests object must be a transactional write in the
   // database.  `user.balance -= value`` and the request is stored on disk after the `write()` call
   const value = Number(request.params.amount.value);
+  console.log('user balance pre withdraw:', user.balance);
   user.balance -= value;
+  console.log('user balance post withdraw:', user.balance);
   const cachedRequest = requestCache.insert(request).write();
 
   //make the request, retrying if we can
@@ -214,6 +236,7 @@ async function idempotentWithdrawal(db, request: WalletWithdrawRequest) {
     //store the withdrawal response id from YUBI
     //when the corresponding event comes back from YUBI, we can mark the entry based on the
     //yubi request id.  This lets us know for sure if a response was received
+    console.log(yubiRequestId);
     cachedRequest.yubiRequestId = yubiRequestId;
     requestCache.write();
   } else {
@@ -235,10 +258,11 @@ async function retryRequest(request): Promise<string | undefined> {
         headers: { 'Idempotency-Key': request.id },
       });
       if (resp.status === 202) {
-        return resp.data.id;
+        return resp.data.processId;
       }
     } catch (e) {
       if (e.response) {
+        console.log(request);
         // request failed due to bad request or server error.  Abort
         console.log(
           'Idempotent Bad Request, removing cached request and refunding user:',
@@ -273,7 +297,7 @@ function jankenMetadata(userId: string) {
     userId,
     gameType: 'janken',
     platform: PLATFORM,
-    time: new Date().getTime(),
+    time: new Date().toString(),
   };
 }
 
@@ -313,7 +337,7 @@ async function createDatabase() {
     db.defaults({
       initialized: true,
       yubiCheckpoint: {
-        eventIndex: 0,
+        eventIndex: 1,
       },
       users: [],
       requestCache: [],
@@ -322,17 +346,37 @@ async function createDatabase() {
 
     const usersCollection = db.get('users');
     usersCollection
-      .insert({ username: 'Goku', balance: 1000, yubiAccount: undefined })
+      .insert({
+        id: '0ee12dff-a026-4fa1-b67a-9f97da73aba4',
+        username: 'Goku',
+        balance: 0,
+        yubiAccount: undefined,
+      })
       .write();
-    // usersCollection
-    //   .insert({ username: 'Yusuke', balance: 1000, yubiAccount: undefined })
-    //   .write();
-    // usersCollection
-    //   .insert({ username: 'Gon', balance: 1000, yubiAccount: undefined })
-    //   .write();
-    // usersCollection
-    //   .insert({ username: 'Naruto', balance: 1000, yubiAccount: undefined })
-    //   .write();
+    usersCollection
+      .insert({
+        id: 'ea706f4f-3bfc-4953-95d3-170dd562bf2e',
+        username: 'Yusuke',
+        balance: 0,
+        yubiAccount: undefined,
+      })
+      .write();
+    usersCollection
+      .insert({
+        id: '10cc7c5-813d-461e-a063-3c5acec61bae',
+        username: 'Gon',
+        balance: 0,
+        yubiAccount: undefined,
+      })
+      .write();
+    usersCollection
+      .insert({
+        id: '617ac13f-4543-4a29-9cef-856d2611b967',
+        username: 'Naruto',
+        balance: 0,
+        yubiAccount: undefined,
+      })
+      .write();
   }
 
   return db;
@@ -341,12 +385,12 @@ async function createDatabase() {
 function stateUpdateLoop(db) {
   const checkpoint = db.get('yubiCheckpoint').value();
   const usersCollection = db.get('users');
+  const txCollection = db.get('transactions').value();
   const requestCache = db.get('requestCache');
 
-  setInterval(async () => {
-    console.log('updating');
+  let loopId = setInterval(async () => {
     try {
-      console.log('sending start at:', checkpoint.eventIndex);
+      // console.log('requesting events from:', checkpoint.eventIndex);
       const resp = await httpClient.post(
         `${YUBI_PARTNER_BACKEND}/partners/events`,
         {
@@ -356,20 +400,43 @@ function stateUpdateLoop(db) {
       if (resp.status !== 200) {
         return;
       }
+
+      // console.log(`received ${resp.data.length} events`);
       for (var i = 0; i < resp.data.length; i++) {
         const event = resp.data[i];
-        console.log(resp.data[i]);
-        ////process each event and store the fact
         const user = usersCollection.getById(event.metadata.userId).value();
-        user.balance += Number(event.amount.value);
-        // console.log(user);
+        console.log(`processing event: ${event.kind}`);
+        switch (event.kind) {
+          case 'Received':
+            // process each event and store the fact
+            user.balance += Number(event.amount.value);
+            user.yubiAccount = event.correlationId;
+            txCollection.push({
+              userId: user.id,
+              kind: 'Deposit',
+              amount: event.amount,
+              at: event.when,
+            });
+            break;
+          case 'Transfered':
+            // It is up to the system to decide if the requestCache for this transfer event
+            // should be deleted
+            txCollection.push({
+              userId: user.id,
+              kind: 'Withdraw',
+              amount: event.amount,
+              at: event.when,
+            });
+            break;
+        }
         // console.log(checkpoint);
         checkpoint.eventIndex += 1;
         // the last write makes everything transactional
-        requestCache.insert({ test: checkpoint.eventIndex }).write();
+        db.write();
       }
     } catch (e) {
       console.log('update failed: ', e);
+      clearInterval(loopId);
       throw e;
     }
   }, 5000);
