@@ -13,7 +13,7 @@ const PLATFORM = 'ABC Corp. Ltd';
 const YUBI_PAYMENTS_BASE = 'http://localhost:3000/payments/partner';
 const YUBI_PARTNER_BACKEND = 'http://localhost:3030';
 const YUBI_API_KEY = 'supersafekey';
-const YUBI_PARTNER_ID = '00000000-0000-0000-0001-000000000001';
+const YUBI_PARTNER_ID = '10101';
 
 const httpClient = axios.create({
   baseURL: 'http://localhost:3030',
@@ -101,7 +101,7 @@ async function main() {
     }
 
     const collection = db.get('users');
-    const txCollection = db.get('transactions').value();
+    const txCollection = db.get('tetherTransactions').value();
     const user = collection.getById(userId).value();
     const cpuMove: JankenMove =
       selections[Math.floor(Math.random() * selections.length)];
@@ -156,7 +156,7 @@ async function main() {
 
   app.post('/transactions', (req, res) => {
     const { userId } = req.body;
-    const txns = db.get('transactions').filter({ userId }).value();
+    const txns = db.get('tetherTransactions').filter({ userId }).value();
     res.json(txns);
   });
 
@@ -252,7 +252,13 @@ async function idempotentWithdrawal(db, request: WalletWithdrawRequest) {
 async function retryRequest(request): Promise<string | undefined> {
   let retries = 5;
   while (retries > 0) {
-    console.log(`idempotent request: ${request.url} ---- ${request.params}`);
+    console.log(
+      `idempotent request: ${request.url} params: ${JSON.stringify(
+        request.params,
+        null,
+        2
+      )}`
+    );
     try {
       let resp = await httpClient.post(request.url, request.params, {
         headers: { 'Idempotency-Key': request.id },
@@ -337,11 +343,11 @@ async function createDatabase() {
     db.defaults({
       initialized: true,
       yubiCheckpoint: {
-        eventIndex: 1,
+        eventIndex: '0',
       },
       users: [],
       requestCache: [],
-      transactions: [],
+      tetherTransactions: [],
     }).write();
 
     const usersCollection = db.get('users');
@@ -385,16 +391,17 @@ async function createDatabase() {
 function stateUpdateLoop(db) {
   const checkpoint = db.get('yubiCheckpoint').value();
   const usersCollection = db.get('users');
-  const txCollection = db.get('transactions').value();
+  const txCollection = db.get('tetherTransactions').value();
   const requestCache = db.get('requestCache');
 
   let loopId = setInterval(async () => {
     try {
-      // console.log('requesting events from:', checkpoint.eventIndex);
+      console.log('requesting events from:', checkpoint.eventIndex);
       const resp = await httpClient.post(
         `${YUBI_PARTNER_BACKEND}/partners/events`,
         {
-          start: checkpoint.eventIndex,
+          currencyKind: 'Tether',
+          version: checkpoint.eventIndex.toString(),
         }
       );
       if (resp.status !== 200) {
@@ -405,7 +412,7 @@ function stateUpdateLoop(db) {
       for (var i = 0; i < resp.data.length; i++) {
         const event = resp.data[i];
         const user = usersCollection.getById(event.metadata.userId).value();
-        console.log(`processing event: ${event.kind}`);
+        console.log(`processing ${event.kind} event`);
         switch (event.kind) {
           case 'Received':
             // process each event and store the fact
@@ -429,8 +436,11 @@ function stateUpdateLoop(db) {
             });
             break;
         }
-        // console.log(checkpoint);
-        checkpoint.eventIndex += 1;
+        //#NOTE this bigint conversion is needed only because javascript only uses 53bit precision
+        //for numbers and the api uses i64 for event indices
+        let index = BigInt(checkpoint.eventIndex);
+        index += BigInt(1);
+        checkpoint.eventIndex = index.toString();
         // the last write makes everything transactional
         db.write();
       }
