@@ -1,135 +1,137 @@
 import {
-  JSONParse,
-  IsPlayResponse,
-  PlayResponse,
-  JankenMove,
-  UserTuple,
-  IsUserState,
-  UserState,
-} from './types';
+    JSONParse,
+    IsPlayResponse,
+    PlayResponse,
+    JankenMove,
+    UserTuple,
+    IsUserState,
+    UserState,
+} from './types'
 
-const GAME_API = 'http://localhost:3001';
+const GAME_API = process.env.REACT_APP_GAME_API
+    ? process.env.REACT_APP_GAME_API
+    : 'http://localhost:3001'
 
 export async function login(userId: string): Promise<UserState> {
-  const resp = await fetch(`${GAME_API}/login`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ userId }),
-  });
+    const resp = await fetch(`${GAME_API}/login`, {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId }),
+    })
 
-  if (!resp.ok) {
-    throw Error(`login failed: `);
-  }
+    if (!resp.ok) {
+        throw Error(`login failed: `)
+    }
 
-  const payload = await resp.text();
-  const result = JSONParse(IsUserState)(payload);
-  switch (result.type) {
-    case 'Ok':
-      return result.value;
-    case 'Err':
-      throw result.error;
-  }
+    const payload = await resp.text()
+    const result = JSONParse(IsUserState)(payload)
+    switch (result.type) {
+        case 'Ok':
+            return result.value
+        case 'Err':
+            throw result.error
+    }
 }
 
 export async function getAllUsers(): Promise<Array<UserTuple>> {
-  const resp = await fetch(`${GAME_API}/allUsers`, {
-    method: 'GET',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-  });
+    const resp = await fetch(`${GAME_API}/allUsers`, {
+        method: 'GET',
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+        },
+    })
 
-  if (!resp.ok) {
-    throw Error(`getAllUsers failed: `);
-  }
+    if (!resp.ok) {
+        throw Error(`getAllUsers failed: `)
+    }
 
-  return await resp.json();
+    return await resp.json()
 }
 
 export async function janken(
-  userId: string,
-  move: JankenMove
+    userId: string,
+    move: JankenMove
 ): Promise<PlayResponse> {
-  const resp = await fetch(`${GAME_API}/janken`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ userId, move }),
-  });
+    const resp = await fetch(`${GAME_API}/janken`, {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId, move }),
+    })
 
-  if (!resp.ok) {
-    throw Error(`playJanken failed: `);
-  }
+    if (!resp.ok) {
+        throw Error(`playJanken failed: `)
+    }
 
-  const payload = await resp.text();
-  const result = JSONParse(IsPlayResponse)(payload);
-  switch (result.type) {
-    case 'Ok':
-      return result.value;
-    case 'Err':
-      throw result.error;
-  }
+    const payload = await resp.text()
+    const result = JSONParse(IsPlayResponse)(payload)
+    switch (result.type) {
+        case 'Ok':
+            return result.value
+        case 'Err':
+            throw result.error
+    }
 }
 
 export async function withdraw(
-  userId: string,
-  currency: string,
-  value: number
+    userId: string,
+    currency: string,
+    value: number
 ) {
-  const resp = await fetch(`${GAME_API}/withdraw`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ userId, currency, value }),
-  });
+    const resp = await fetch(`${GAME_API}/withdraw`, {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId, currency, value }),
+    })
 
-  if (!resp.ok) {
-    throw Error(`${await resp.text()}`);
-  }
+    if (!resp.ok) {
+        throw Error(`${await resp.text()}`)
+    }
 }
 
 export async function getTransactions(userId: string): Promise<Array<any>> {
-  const resp = await fetch(`${GAME_API}/transactions`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ userId }),
-  });
+    const resp = await fetch(`${GAME_API}/transactions`, {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId }),
+    })
 
-  if (!resp.ok) {
-    throw Error(`${await resp.text()}`);
-  }
+    if (!resp.ok) {
+        throw Error(`${await resp.text()}`)
+    }
 
-  return resp.json();
+    return resp.json()
 }
 
 export async function getDepositLink(userId: string): Promise<string> {
-  const resp = await fetch(`${GAME_API}/depositLink`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ userId }),
-  });
+    const resp = await fetch(`${GAME_API}/depositLink`, {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId }),
+    })
 
-  if (!resp.ok) {
-    throw Error(`${await resp.text()}`);
-  }
+    if (!resp.ok) {
+        throw Error(`${await resp.text()}`)
+    }
 
-  return resp.json();
+    return resp.json()
 }
 
 export function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms))
 }

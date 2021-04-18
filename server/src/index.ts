@@ -9,11 +9,22 @@ import { UserState, JankenMove, JankenResult } from './types';
 import mkdirp from 'mkdirp';
 import { v4 as uuidv4 } from 'uuid';
 
-const PLATFORM = 'ABC Corp. Ltd';
-const YUBI_PAYMENTS_BASE = 'http://localhost:3000/payments/partner';
-const YUBI_PARTNER_BACKEND = 'http://localhost:3030';
-const YUBI_API_KEY = 'supersafekey';
-const YUBI_PARTNER_ID = '10101';
+// Aggregate Configuration Variables
+const PARTNER_PLATFORM = 'ABC Corp. Ltd';
+const PORT = process.env.PORT ? process.env.PORT : 3001;
+const YUBI_PARTNER_ID = process.env.PARTNER_ID
+  ? process.env.PARTNER_ID
+  : '10101';
+const YUBI_API_KEY = process.env.YUBI_API_KEY
+  ? process.env.YUBI_API_KEY
+  : 'supersafekey';
+const YUBI_HOST = process.env.YUBI_HOST
+  ? process.env.YUBI_HOST
+  : 'http://localhost:3000';
+const YUBI_API = process.env.YUBI_PARTNER_BACKEND
+  ? process.env.YUBI_API
+  : 'http://localhost:3030';
+const YUBI_PAYMENTS_URL = `${YUBI_HOST}/payments/partner`;
 
 const httpClient = axios.create({
   baseURL: 'http://localhost:3030',
@@ -24,7 +35,7 @@ const httpClient = axios.create({
 
 async function main() {
   const app = express();
-  const port = 3001;
+  const port = PORT;
   const db = await createDatabase();
   await recover(db);
 
@@ -32,12 +43,14 @@ async function main() {
   app.use(bodyParser.json());
   app.use(cors());
 
+  // Mock Login
   app.post('/login', (req, res) => {
     const { userId } = req.body;
     const user = db.get('users').getById(userId).value();
     res.json(user);
   });
 
+  // Query users
   app.get('/allUsers', (_req, res) => {
     const users = db
       .get('users')
@@ -46,6 +59,7 @@ async function main() {
     res.json(users);
   });
 
+  // Withdraw funds to YUBI as User
   app.post('/withdraw', async (req, res) => {
     const { userId, currency, value } = req.body;
     const userCollection = db.get('users');
@@ -72,7 +86,7 @@ async function main() {
       id: idempotencyKey,
       userId,
       yubiRequestId: undefined,
-      url: `${YUBI_PARTNER_BACKEND}/partners/userWithdrawal`,
+      url: `${YUBI_API}/partners/userWithdrawal`,
       params: {
         user: user.yubiAccount,
         amount: {
@@ -92,9 +106,10 @@ async function main() {
     }
   });
 
-  const wager = 10;
-  const selections: Array<JankenMove> = ['rock', 'paper', 'scissors'];
+  // Play Janken as User
   app.post('/janken', (req, res) => {
+    const wager = 10;
+    const selections: Array<JankenMove> = ['rock', 'paper', 'scissors'];
     const { userId, move } = req.body;
     if (move !== 'rock' && move !== 'paper' && move !== 'scissors') {
       res.status(500).send('invalid move');
@@ -143,6 +158,7 @@ async function main() {
     });
   });
 
+  // Get the YUBI Deposit link
   app.post('/depositLink', (req, res) => {
     const { userId } = req.body;
     const user = db.get('users').getById(userId).value();
@@ -154,17 +170,20 @@ async function main() {
     res.json(createYubiPaymentLink(userId, 'Tether'));
   });
 
+  // Get list of User's Transactions
   app.post('/transactions', (req, res) => {
     const { userId } = req.body;
     const txns = db.get('tetherTransactions').filter({ userId }).value();
     res.json(txns);
   });
 
+  // Get Full Database State Dump
   app.get('/state', (_req, res) => {
     res.header('Content-Type', 'application/json');
     res.send(JSON.stringify(db, null, 4));
   });
 
+  // Check API Server Liveliness
   app.get('/healthz', (_req, res) => {
     res.sendStatus(200);
   });
@@ -222,7 +241,7 @@ async function idempotentWithdrawal(db, request: WalletWithdrawRequest) {
   const user = db.get('users').getById(request.userId).value();
   const requestCache = db.get('requestCache');
 
-  // #IMPORTANT, User.balance and idempotent requests object must be a transactional write in the
+  // #IMPORTANT, User.balance and idempotent requests object must be a transactional write in YOUR
   // database.  `user.balance -= value`` and the request is stored on disk after the `write()` call
   const value = Number(request.params.amount.value);
   console.log('user balance pre withdraw:', user.balance);
@@ -230,7 +249,7 @@ async function idempotentWithdrawal(db, request: WalletWithdrawRequest) {
   console.log('user balance post withdraw:', user.balance);
   const cachedRequest = requestCache.insert(request).write();
 
-  //make the request, retrying if we can
+  //Post Request, retrying if we can
   const yubiRequestId = await retryRequest(request);
   if (yubiRequestId) {
     //store the withdrawal response id from YUBI
@@ -302,7 +321,7 @@ function jankenMetadata(userId: string) {
   return {
     userId,
     gameType: 'janken',
-    platform: PLATFORM,
+    platform: PARTNER_PLATFORM,
     time: new Date().toString(),
   };
 }
@@ -311,7 +330,7 @@ function jankenMetadata(userId: string) {
 // if the URL is created on the server side
 function createYubiPaymentLink(userId: string, currency: string): string {
   const metadataURI = encodeObjectKV(jankenMetadata(userId));
-  return `${YUBI_PAYMENTS_BASE}?currency=${currency}&partner=${YUBI_PARTNER_ID}&${metadataURI}`;
+  return `${YUBI_PAYMENTS_URL}?currency=${currency}&partner=${YUBI_PARTNER_ID}&${metadataURI}`;
 }
 
 function encodeObjectKV(o: object) {
@@ -397,13 +416,10 @@ function stateUpdateLoop(db) {
   let loopId = setInterval(async () => {
     try {
       console.log('requesting events from:', checkpoint.eventIndex);
-      const resp = await httpClient.post(
-        `${YUBI_PARTNER_BACKEND}/partners/events`,
-        {
-          currencyKind: 'Tether',
-          version: checkpoint.eventIndex.toString(),
-        }
-      );
+      const resp = await httpClient.post(`${YUBI_API}/partners/events`, {
+        currencyKind: 'Tether',
+        version: checkpoint.eventIndex.toString(),
+      });
       if (resp.status !== 200) {
         return;
       }
