@@ -26,6 +26,13 @@ const YUBI_API = process.env.YUBI_PARTNER_BACKEND
   : 'http://localhost:3030';
 const YUBI_PAYMENTS_URL = `${YUBI_HOST}/payments/partner`;
 
+console.log(`Port: ${PORT}\n
+			Partner: ${PARTNER_PLATFORM}\n
+			Yubi PartnerID: ${YUBI_PARTNER_ID}\n
+			Yubi Api Key: ${YUBI_API_KEY}\n
+			Yubi Api: ${YUBI_API}\n
+			Yubi Payments URL: ${YUBI_PAYMENTS_URL}`);
+
 const httpClient = axios.create({
   baseURL: 'http://localhost:3030',
   headers: {

@@ -12,6 +12,8 @@ const GAME_API = process.env.REACT_APP_GAME_API
     ? process.env.REACT_APP_GAME_API
     : 'http://localhost:3001'
 
+console.log(`Game Api: ${GAME_API}`)
+
 export async function login(userId: string): Promise<UserState> {
     const resp = await fetch(`${GAME_API}/login`, {
         method: 'POST',
