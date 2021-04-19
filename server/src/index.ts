@@ -123,6 +123,7 @@ async function main() {
     const { userId, move } = req.body;
     if (move !== 'rock' && move !== 'paper' && move !== 'scissors') {
       res.status(500).send('invalid move');
+      return;
     }
 
     const collection = db.get('users');
@@ -133,6 +134,7 @@ async function main() {
 
     if (user.balance < wager) {
       res.status(500).send('insufficient funds');
+      return;
     }
 
     let result: JankenResult;
