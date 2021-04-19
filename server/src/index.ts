@@ -131,6 +131,10 @@ async function main() {
     const cpuMove: JankenMove =
       selections[Math.floor(Math.random() * selections.length)];
 
+    if (user.balance < wager) {
+      res.status(500).send('insufficient funds');
+    }
+
     let result: JankenResult;
     if (move === cpuMove) {
       result = 'draw';
@@ -332,7 +336,7 @@ function jankenMetadata(userId: string) {
     userId,
     gameType: 'janken',
     platform: PARTNER_PLATFORM,
-    time: new Date().toString(),
+    time: Date.now(),
   };
 }
 
