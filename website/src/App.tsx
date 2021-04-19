@@ -81,7 +81,6 @@ function UserMenu(props: { user: UserState }) {
                 <button
                     onClick={async () => {
                         const yubiLink = await API.getDepositLink(user.id)
-                        console.log(yubiLink)
                         openInNewTab(yubiLink)
                     }}
                 >

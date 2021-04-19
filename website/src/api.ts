@@ -25,7 +25,7 @@ export async function login(userId: string): Promise<UserState> {
     })
 
     if (!resp.ok) {
-        throw Error(`login failed: `)
+        throw Error(`login failed: ${await resp.text()}`)
     }
 
     const payload = await resp.text()
@@ -48,7 +48,7 @@ export async function getAllUsers(): Promise<Array<UserTuple>> {
     })
 
     if (!resp.ok) {
-        throw Error(`getAllUsers failed: `)
+        throw Error(`getAllUsers failed: ${await resp.text()}`)
     }
 
     return await resp.json()
@@ -68,7 +68,7 @@ export async function janken(
     })
 
     if (!resp.ok) {
-        throw Error(`playJanken failed: `)
+        throw Error(`janken failed: ${await resp.text()}`)
     }
 
     const payload = await resp.text()
