@@ -47,6 +47,7 @@ function App() {
 type WithdrawState = 'sending' | 'idle'
 type TxState = { txns: Array<any>; state: 'sending' | 'idle' }
 
+var windowRef: any = null
 function UserMenu(props: { user: UserState }) {
     const { user } = props
     const [state, setState] = useState<WithdrawState>('idle')
@@ -79,9 +80,14 @@ function UserMenu(props: { user: UserState }) {
             <p>
                 [{user.username}] Credits: {user.balance} USDT{' '}
                 <button
-                    onClick={async () => {
-                        const yubiLink = await API.getDepositLink(user.id)
-                        openInNewTab(yubiLink)
+                    onClick={() => {
+                        windowRef = window.open()
+                        ;(async () => {
+                            const yubiLink = await API.getDepositLink(user.id)
+                            console.log(windowRef)
+                            windowRef.location = yubiLink
+                            windowRef.name = '_blank'
+                        })()
                     }}
                 >
                     Deposit
