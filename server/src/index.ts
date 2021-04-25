@@ -1,6 +1,8 @@
 import express from 'express';
+import crypto from 'crypto';
 import bodyParser from 'body-parser';
 import low from 'lowdb';
+import fs from 'fs';
 import FileSync from 'lowdb/adapters/FileSync';
 import lodashId from 'lodash-id';
 import cors from 'cors';
@@ -8,6 +10,9 @@ import axios from 'axios';
 import { UserState, JankenMove, JankenResult } from './types';
 import mkdirp from 'mkdirp';
 import { v4 as uuidv4 } from 'uuid';
+
+const RSA_PRIVATE_KEY = fs.readFileSync('./private.pem');
+const RSA_PUBLIC_KEY = fs.readFileSync('./public.pem');
 
 // Aggregate Configuration Variables
 const PARTNER_PLATFORM = 'ABC Corp. Ltd';
@@ -44,6 +49,16 @@ const httpClient = axios.create({
 });
 
 async function main() {
+  const signer = crypto.createSign('RSA-SHA256');
+  const verifier = crypto.createVerify('RSA-SHA256');
+  signer.update('hello world');
+  let sig = signer.sign(RSA_PRIVATE_KEY, 'base64');
+  console.log(`hello world signature: ${sig}`);
+
+  verifier.update('hello world');
+  let result = verifier.verify(RSA_PUBLIC_KEY, sig, 'base64');
+  console.log(`verify res: ${result}`);
+
   const app = express();
   const port = PORT;
   const db = await createDatabase();
@@ -283,6 +298,54 @@ async function idempotentWithdrawal(db, request: WalletWithdrawRequest) {
 
   return true;
 }
+
+//type DirectWithdrawRequest = {
+//  id: string;
+//  userId: string;
+//  url: string;
+//  yubiRequestId: string | undefined;
+//  params: {
+//    amount: {
+//      kind: string;
+//      value: string;
+//    };
+//    idempotencyKey: string;
+//    metadata: any;
+//  };
+//};
+
+//// Yubi API guarantees a request remains idempotent for 24 hours if the same idempotency key
+//// is given for a request
+//async function idempotentDirectWithdrawal(db, request: WalletWithdrawRequest) {
+//  const user = db.get('users').getById(request.userId).value();
+//  const requestCache = db.get('requestCache');
+
+//  // #IMPORTANT, User.balance and idempotent requests object must be a transactional write in YOUR
+//  // database.  `user.balance -= value`` and the request is stored on disk after the `write()` call
+//  const value = Number(request.params.amount.value);
+//  console.log('user balance pre withdraw:', user.balance);
+//  user.balance -= value;
+//  console.log('user balance post withdraw:', user.balance);
+//  const cachedRequest = requestCache.insert(request).write();
+
+//  //Post Request, retrying if we can
+//  const yubiRequestId = await retryRequest(request);
+//  if (yubiRequestId) {
+//    //store the withdrawal response id from YUBI
+//    //when the corresponding event comes back from YUBI, we can mark the entry based on the
+//    //yubi request id.  This lets us know for sure if a response was received
+//    console.log(yubiRequestId);
+//    cachedRequest.yubiRequestId = yubiRequestId;
+//    requestCache.write();
+//  } else {
+//    // #IMPORTANT the balance update and requestCache item must be removed together in
+//    // a transaction!
+//    user.balance += value;
+//    requestCache.removeById(request.id).write();
+//  }
+
+//  return true;
+//}
 
 async function retryRequest(request): Promise<string | undefined> {
   let retries = 5;
