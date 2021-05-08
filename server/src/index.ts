@@ -495,11 +495,15 @@ function stateUpdateLoop(db) {
   let loopId = setInterval(async () => {
     try {
       console.log('requesting events from:', checkpoint.eventIndex);
-      const resp = await httpClient.post(`${YUBI_API}/partners/events`, {
-        currencyKind: 'Tether',
-        version: checkpoint.eventIndex.toString(),
-      });
+      const request_uri = `${YUBI_API}/partners/events?currencyKind=Tether&version=${checkpoint.eventIndex.toString()}`;
+      const signer = crypto.createSign('RSA-SHA256');
+      signer.update(request_uri);
+      const signature = signer.sign(RSA_PRIVATE_KEY, 'base64');
+      const signed_request = `${request_uri}&sig=${signature}`;
+
+      const resp = await httpClient.get(signed_request);
       if (resp.status !== 200) {
+        console.log(`events query failed with status: ${resp.status}`);
         return;
       }
 
