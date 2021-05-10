@@ -10,6 +10,7 @@ import axios from 'axios';
 import { UserState, JankenMove, JankenResult } from './types';
 import mkdirp from 'mkdirp';
 import { v4 as uuidv4 } from 'uuid';
+import { URLSearchParams } from 'url';
 
 const RSA_PRIVATE_KEY = fs.readFileSync('./private.pem');
 const RSA_PUBLIC_KEY = fs.readFileSync('./public.pem');
@@ -20,9 +21,6 @@ const PORT = process.env.PORT ? process.env.PORT : 3001;
 const YUBI_PARTNER_ID = process.env.PARTNER_ID
   ? process.env.PARTNER_ID
   : '10101';
-const YUBI_API_KEY = process.env.YUBI_API_KEY
-  ? process.env.YUBI_API_KEY
-  : 'supersafekey';
 const YUBI_HOST = process.env.YUBI_HOST
   ? process.env.YUBI_HOST
   : 'http://localhost:3000';
@@ -36,16 +34,12 @@ console.log(`
 Port: ${PORT}
 Partner: ${PARTNER_PLATFORM}
 Yubi PartnerID: ${YUBI_PARTNER_ID}
-Yubi Api Key: ${YUBI_API_KEY}
 Yubi Api: ${YUBI_API}
 Yubi Payments URL: ${YUBI_PAYMENTS_URL}
 ===========\n`);
 
 const httpClient = axios.create({
   baseURL: 'http://localhost:3030',
-  headers: {
-    'X-API-KEY': YUBI_API_KEY,
-  },
 });
 
 async function main() {
@@ -401,26 +395,13 @@ function jankenMetadata(userId: string) {
     userId,
     gameType: 'janken',
     platform: PARTNER_PLATFORM,
-    time: Date.now(),
+    time: Date.now().toString(),
   };
 }
 
-// This can be created on the front end but it is easier to make changes
-// if the URL is created on the server side
 function createYubiPaymentLink(userId: string, currency: string): string {
-  const metadataURI = encodeObjectKV(jankenMetadata(userId));
-  return `${YUBI_PAYMENTS_URL}?currency=${currency}&partner=${YUBI_PARTNER_ID}&${metadataURI}`;
-}
-
-function encodeObjectKV(o: object) {
-  const str: Array<string> = [];
-  for (var key in o) {
-    if (o.hasOwnProperty(key)) {
-      const value = o[key];
-      str.push(encodeURIComponent(key) + '=' + encodeURIComponent(value));
-    }
-  }
-  return str.join('&');
+  const metadataURIParams = new URLSearchParams(jankenMetadata(userId));
+  return `${YUBI_PAYMENTS_URL}?currency=${currency}&partner=${YUBI_PARTNER_ID}&${metadataURIParams.toString()}`;
 }
 
 async function createDatabase() {
@@ -493,23 +474,15 @@ function stateUpdateLoop(db) {
   const requestCache = db.get('requestCache');
 
   let loopId = setInterval(async () => {
+    let data = await query_events(checkpoint.eventIndex);
+    if (!data) {
+      return;
+    }
+
     try {
-      console.log('requesting events from:', checkpoint.eventIndex);
-      const request_uri = `${YUBI_API}/partners/events?currencyKind=Tether&version=${checkpoint.eventIndex.toString()}`;
-      const signer = crypto.createSign('RSA-SHA256');
-      signer.update(request_uri);
-      const signature = signer.sign(RSA_PRIVATE_KEY, 'base64');
-      const signed_request = `${request_uri}&sig=${signature}`;
-
-      const resp = await httpClient.get(signed_request);
-      if (resp.status !== 200) {
-        console.log(`events query failed with status: ${resp.status}`);
-        return;
-      }
-
       // console.log(`received ${resp.data.length} events`);
-      for (var i = 0; i < resp.data.length; i++) {
-        const event = resp.data[i];
+      for (var i = 0; i < data.length; i++) {
+        const event = data[i];
         const user = usersCollection.getById(event.metadata.userId).value();
         console.log(`processing ${event.kind} event`);
         switch (event.kind) {
@@ -544,9 +517,31 @@ function stateUpdateLoop(db) {
         db.write();
       }
     } catch (e) {
-      console.log('update failed: ', e);
+      console.log(`server logic error: ${e}`);
       clearInterval(loopId);
       throw e;
     }
   }, 5000);
+}
+
+async function query_events(eventIndex: string): Promise<any> {
+  try {
+    console.log('requesting events from:', eventIndex);
+    const request_uri = `/partners/events?partnerId=${YUBI_PARTNER_ID}&currencyKind=Tether&version=${eventIndex}`;
+    const signer = crypto.createSign('RSA-SHA256');
+    signer.update(request_uri);
+    const signature = signer.sign(RSA_PRIVATE_KEY, 'base64');
+    const signed_request = `${request_uri}&sig=${signature}`;
+    console.log(`signed request uri: ${signed_request}`);
+
+    const resp = await httpClient.get(`${YUBI_API}${signed_request}`);
+    if (resp.status !== 200) {
+      console.log(`events query failed with status: ${resp.status}`);
+      return;
+    }
+    return resp.data;
+  } catch (e) {
+    console.log(`update failed: ${e}`);
+    return;
+  }
 }

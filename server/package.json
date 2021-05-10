@@ -9,9 +9,10 @@
   "license": "MIT",
   "keywords": [],
   "scripts": {
-    "start": "node build/main/index.js",
+    "start": "yarn build && node build/main/index.js",
     "dev-web": "cd ../website && PORT=3002 yarn start",
     "dev": "concurrently --kill-others-on-fail \"yarn watch:build\" \"nodemon -q --watch build build/main/index.js\" \"yarn dev-web\"",
+    "dev-server": "concurrently --kill-others-on-fail \"yarn watch:build\" \"nodemon -q --watch build build/main/index.js\"",
     "build": "run-p build:*",
     "build:main": "tsc -p tsconfig.json",
     "build:module": "tsc -p tsconfig.module.json",
