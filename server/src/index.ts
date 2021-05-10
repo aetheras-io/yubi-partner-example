@@ -1,5 +1,6 @@
 import express from 'express';
 import crypto from 'crypto';
+import { Keccak } from 'sha3';
 import bodyParser from 'body-parser';
 import low from 'lowdb';
 import fs from 'fs';
@@ -43,15 +44,26 @@ const httpClient = axios.create({
 });
 
 async function main() {
+  const payload = Buffer.from(JSON.stringify({ hello: 'world' }), 'utf8');
+  console.log(`payload base64: ${payload.toString('base64')}`);
   const signer = crypto.createSign('RSA-SHA256');
-  const verifier = crypto.createVerify('RSA-SHA256');
-  signer.update('hello world');
-  let sig = signer.sign(RSA_PRIVATE_KEY, 'base64');
-  console.log(`hello world signature: ${sig}`);
+  signer.update(payload.toString('base64'));
+  const signature = signer.sign(RSA_PRIVATE_KEY, 'base64');
 
-  verifier.update('hello world');
-  let result = verifier.verify(RSA_PUBLIC_KEY, sig, 'base64');
-  console.log(`verify res: ${result}`);
+  const verifier = crypto.createVerify('RSA-SHA256');
+  verifier.update(payload.toString('base64'));
+  let result = verifier.verify(RSA_PUBLIC_KEY, signature, 'base64');
+  console.log('RESULT: ', result);
+
+  // const signer = crypto.createSign('RSA-SHA256');
+  // const verifier = crypto.createVerify('RSA-SHA256');
+  // signer.update('hello world');
+  // let sig = signer.sign(RSA_PRIVATE_KEY, 'base64');
+  // console.log(`hello world signature: ${sig}`);
+
+  // verifier.update('hello world');
+  // let result = verifier.verify(RSA_PUBLIC_KEY, sig, 'base64');
+  // console.log(`verify res: ${result}`);
 
   const app = express();
   const port = PORT;
@@ -524,17 +536,55 @@ function stateUpdateLoop(db) {
   }, 5000);
 }
 
+type EventsRequest = {
+  currencyKind: string;
+  version: string;
+};
+
+type SignedRequest = {
+  id: string;
+  signature: string;
+  payload: string;
+};
+
+function createSignedRequest(
+  id: string,
+  request: object,
+  privateKey: any
+): SignedRequest {
+  // get the JSON bytes of the request as base64 string
+  const payload = Buffer.from(JSON.stringify(request), 'utf8').toString(
+    'base64'
+  );
+
+  // keccak256 hash the base64 payload, since RSA signature message can only be 222 bytes long
+  const hasher = new Keccak(256);
+  hasher.update(payload);
+  const output = hasher.digest();
+
+  // sign the keccak256 hash as a base64 signature
+  const signer = crypto.createSign('RSA-SHA256');
+  const signature = signer.update(output).sign(privateKey, 'base64');
+  return { id, signature, payload };
+}
+
 async function query_events(eventIndex: string): Promise<any> {
   try {
     console.log('requesting events from:', eventIndex);
-    const request_uri = `/partners/events?partnerId=${YUBI_PARTNER_ID}&currencyKind=Tether&version=${eventIndex}`;
-    const signer = crypto.createSign('RSA-SHA256');
-    signer.update(request_uri);
-    const signature = signer.sign(RSA_PRIVATE_KEY, 'base64');
-    const signed_request = `${request_uri}&sig=${signature}`;
-    console.log(`signed request uri: ${signed_request}`);
+    const request: EventsRequest = {
+      currencyKind: 'Tether',
+      version: eventIndex,
+    };
+    const signedRequest = createSignedRequest(
+      YUBI_PARTNER_ID,
+      request,
+      RSA_PRIVATE_KEY
+    );
 
-    const resp = await httpClient.get(`${YUBI_API}${signed_request}`);
+    const resp = await httpClient.post(
+      `${YUBI_API}/partners/events`,
+      signedRequest
+    );
     if (resp.status !== 200) {
       console.log(`events query failed with status: ${resp.status}`);
       return;
@@ -545,3 +595,10 @@ async function query_events(eventIndex: string): Promise<any> {
     return;
   }
 }
+
+// const request_uri = `/partners/events?partnerId=${YUBI_PARTNER_ID}&currencyKind=Tether&version=${eventIndex}`;
+// const signer = crypto.createSign('RSA-SHA256');
+// signer.update(request_uri);
+// const signature = signer.sign(RSA_PRIVATE_KEY, 'base64');
+// const signed_request = `${request_uri}&sig=${signature}`;
+// console.log(`signed request uri: ${signed_request}`);
