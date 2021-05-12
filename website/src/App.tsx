@@ -51,14 +51,15 @@ var windowRef: any = null
 function UserMenu(props: { user: UserState }) {
     const { user } = props
     const [state, setState] = useState<WithdrawState>('idle')
+    const [address, setAddress] = useState<string>('')
 
-    const sendWithdrawal = useCallback(async () => {
+    const sendYubiWithdrawal = useCallback(async () => {
         if (state === 'idle') {
             setState('sending')
             try {
                 await API.delay(1000)
-                await API.withdraw(user.id, 'Tether', 50)
-                alert('Withdrawal Request of $50 USDT accepted')
+                await API.withdrawOnYubi(user.id, 'Tether', 50)
+                alert('Withdrawal Yubi Request of $50 USDT accepted')
                 setState('idle')
             } catch (e) {
                 console.log(e)
@@ -69,6 +70,29 @@ function UserMenu(props: { user: UserState }) {
             console.log('withdraw request in flight')
         }
     }, [user, state, setState])
+
+    const sendChainWithdrawal = useCallback(async () => {
+        if (state === 'idle' && address) {
+            setState('sending')
+            try {
+                await API.delay(1000)
+                await API.withdrawOnChain(user.id, address, 'Tether', 50)
+                alert('Withdrawal Chain Request of $50 USDT accepted')
+                setState('idle')
+            } catch (e) {
+                console.log(e)
+                alert('Withdrawal failed:' + e)
+                setState('idle')
+            }
+        } else {
+            console.log('withdraw request in flight')
+        }
+    }, [user, state, setState, address])
+
+    const handleAddressChange = (evt: any) => {
+        console.log(evt.currentTarget.value)
+        setAddress(evt.currentTarget.value)
+    }
 
     if (!user) {
         return null
@@ -92,8 +116,15 @@ function UserMenu(props: { user: UserState }) {
                 >
                     Deposit
                 </button>
-                <button disabled={pendingRequest} onClick={sendWithdrawal}>
-                    Withdraw(50)
+                <button disabled={pendingRequest} onClick={sendYubiWithdrawal}>
+                    Withdraw Yubi(50)
+                </button>
+                <input value={address} onChange={handleAddressChange}></input>
+                <button
+                    disabled={pendingRequest || !address}
+                    onClick={sendChainWithdrawal}
+                >
+                    Withdraw Chain(50)
                 </button>
             </p>
         </div>

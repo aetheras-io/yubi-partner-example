@@ -81,12 +81,32 @@ export async function janken(
     }
 }
 
-export async function withdraw(
+export async function withdrawOnChain(
+    userId: string,
+    address: string,
+    currency: string,
+    value: number
+) {
+    const resp = await fetch(`${GAME_API}/withdrawOnChain`, {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId, currency, value, address }),
+    })
+
+    if (!resp.ok) {
+        throw Error(`${await resp.text()}`)
+    }
+}
+
+export async function withdrawOnYubi(
     userId: string,
     currency: string,
     value: number
 ) {
-    const resp = await fetch(`${GAME_API}/withdraw`, {
+    const resp = await fetch(`${GAME_API}/withdrawOnYubi`, {
         method: 'POST',
         headers: {
             Accept: 'application/json',

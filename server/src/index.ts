@@ -44,31 +44,13 @@ const httpClient = axios.create({
 });
 
 async function main() {
-  const payload = Buffer.from(JSON.stringify({ hello: 'world' }), 'utf8');
-  console.log(`payload base64: ${payload.toString('base64')}`);
-  const signer = crypto.createSign('RSA-SHA256');
-  signer.update(payload.toString('base64'));
-  const signature = signer.sign(RSA_PRIVATE_KEY, 'base64');
-
-  const verifier = crypto.createVerify('RSA-SHA256');
-  verifier.update(payload.toString('base64'));
-  let result = verifier.verify(RSA_PUBLIC_KEY, signature, 'base64');
-  console.log('RESULT: ', result);
-
-  // const signer = crypto.createSign('RSA-SHA256');
-  // const verifier = crypto.createVerify('RSA-SHA256');
-  // signer.update('hello world');
-  // let sig = signer.sign(RSA_PRIVATE_KEY, 'base64');
-  // console.log(`hello world signature: ${sig}`);
-
-  // verifier.update('hello world');
-  // let result = verifier.verify(RSA_PUBLIC_KEY, sig, 'base64');
-  // console.log(`verify res: ${result}`);
-
   const app = express();
   const port = PORT;
   const db = await createDatabase();
   await recover(db);
+
+  // start the event chaser
+  stateUpdateLoop(db);
 
   //middleware
   app.use(bodyParser.json());
@@ -91,7 +73,7 @@ async function main() {
   });
 
   // Withdraw funds to YUBI as User
-  app.post('/withdraw', async (req, res) => {
+  app.post('/withdrawOnYubi', async (req, res) => {
     const { userId, currency, value } = req.body;
     const userCollection = db.get('users');
     let user = userCollection.getById(userId).value();
@@ -113,27 +95,72 @@ async function main() {
     }
 
     const idempotencyKey = uuidv4();
+    const payload: OnYubi = {
+      idempotencyKey,
+      user: user.yubiAccount,
+      amount: {
+        kind: currency,
+        value: String(value),
+      },
+      metadata: jankenMetadata(userId),
+    };
     const request = {
       id: idempotencyKey,
       userId,
       yubiRequestId: undefined,
       url: `${YUBI_API}/partners/userWithdrawal`,
-      params: {
-        user: user.yubiAccount,
-        amount: {
-          kind: currency,
-          value: String(value),
-        },
-        idempotencyKey,
-        metadata: jankenMetadata(userId),
-      },
+      payload,
     };
 
     let accepted = await idempotentWithdrawal(db, request);
-    if (!accepted) {
-      res.sendStatus(500);
-    } else {
+    if (accepted) {
       res.sendStatus(202);
+    } else {
+      res.sendStatus(500);
+    }
+  });
+
+  // Withdraw funds to Chain as User
+  app.post('/withdrawOnChain', async (req, res) => {
+    const { userId, currency, value, address } = req.body;
+    const userCollection = db.get('users');
+    let user = userCollection.getById(userId).value();
+    if (!user) {
+      res.status(400).send('unknown user');
+      return;
+    }
+    if (user.balance < value) {
+      res.status(400).send('insufficient funds');
+      return;
+    }
+    if (currency !== 'Tether') {
+      res.status(400).send('unsupported currency');
+      return;
+    }
+
+    const idempotencyKey = uuidv4();
+    const payload: OnChain = {
+      idempotencyKey,
+      address,
+      amount: {
+        kind: currency,
+        value: String(value),
+      },
+      metadata: jankenMetadata(userId),
+    };
+    const request = {
+      id: idempotencyKey,
+      userId,
+      yubiRequestId: undefined,
+      url: `${YUBI_API}/partners/userDirectWithdrawal`,
+      payload,
+    };
+
+    let accepted = await idempotentWithdrawal(db, request);
+    if (accepted) {
+      res.sendStatus(202);
+    } else {
+      res.sendStatus(500);
     }
   });
 
@@ -228,8 +255,6 @@ async function main() {
   app.listen(port, () => {
     console.log(`app listening at http://localhost:${port}`);
   });
-
-  stateUpdateLoop(db);
 }
 
 main()
@@ -239,7 +264,7 @@ main()
 // In case of a crash, we get all of the requests without a requestId (due to missing the response
 // from the Yubi API server) and retry the request until we receive a 202 accepted
 async function recover(db) {
-  const requestCache: Array<WalletWithdrawRequest> = db
+  const requestCache: Array<WithdrawRequest> = db
     .get('requestCache')
     .filter({ yubiRequestId: undefined })
     .value();
@@ -256,146 +281,119 @@ async function recover(db) {
   }
 }
 
-type WalletWithdrawRequest = {
+type WithdrawRequest = {
   id: string;
   userId: string;
   url: string;
   yubiRequestId: string | undefined;
-  params: {
-    user: string;
-    amount: {
-      kind: string;
-      value: string;
-    };
-    idempotencyKey: string;
-    metadata: any;
+  payload: OnYubi | OnChain;
+};
+
+type OnYubi = {
+  idempotencyKey: string;
+  user: string;
+  amount: {
+    kind: string;
+    value: string;
   };
+  metadata: any;
+};
+
+type OnChain = {
+  idempotencyKey: string;
+  address: string;
+  amount: {
+    kind: string;
+    value: string;
+  };
+  metadata: any;
 };
 
 // Yubi API guarantees a request remains idempotent for 24 hours if the same idempotency key
 // is given for a request
-async function idempotentWithdrawal(db, request: WalletWithdrawRequest) {
+async function idempotentWithdrawal(db, request: WithdrawRequest) {
   const user = db.get('users').getById(request.userId).value();
   const requestCache = db.get('requestCache');
 
   // #IMPORTANT, User.balance and idempotent requests object must be a transactional write in YOUR
   // database.  `user.balance -= value`` and the request is stored on disk after the `write()` call
-  const value = Number(request.params.amount.value);
+  const value = Number(request.payload.amount.value);
   console.log('user balance pre withdraw:', user.balance);
   user.balance -= value;
   console.log('user balance post withdraw:', user.balance);
   const cachedRequest = requestCache.insert(request).write();
 
   //Post Request, retrying if we can
-  const yubiRequestId = await retryRequest(request);
+  let headers = createSignedHeaders(
+    YUBI_PARTNER_ID,
+    RSA_PRIVATE_KEY,
+    request.payload
+  );
+  const [yubiRequestId, revert] = await retryRequest(
+    request.url,
+    headers,
+    request.payload
+  );
   if (yubiRequestId) {
     //store the withdrawal response id from YUBI
     //when the corresponding event comes back from YUBI, we can mark the entry based on the
-    //yubi request id.  This lets us know for sure if a response was received
-    console.log(yubiRequestId);
+    //yubi request id as complete.  This lets us know for sure if a response was 202 accepted
+    console.log('Withdrawal accepted with id: ', yubiRequestId);
     cachedRequest.yubiRequestId = yubiRequestId;
     requestCache.write();
   } else {
-    // #IMPORTANT the balance update and requestCache item must be removed together in
-    // a transaction!
-    user.balance += value;
-    requestCache.removeById(request.id).write();
+    if (revert) {
+      // #IMPORTANT the balance update and requestCache item must be removed together in
+      // a transaction!
+      user.balance += value;
+      requestCache.removeById(request.id).write();
+    }
+    return false;
   }
-
   return true;
 }
 
-//type DirectWithdrawRequest = {
-//  id: string;
-//  userId: string;
-//  url: string;
-//  yubiRequestId: string | undefined;
-//  params: {
-//    amount: {
-//      kind: string;
-//      value: string;
-//    };
-//    idempotencyKey: string;
-//    metadata: any;
-//  };
-//};
-
-//// Yubi API guarantees a request remains idempotent for 24 hours if the same idempotency key
-//// is given for a request
-//async function idempotentDirectWithdrawal(db, request: WalletWithdrawRequest) {
-//  const user = db.get('users').getById(request.userId).value();
-//  const requestCache = db.get('requestCache');
-
-//  // #IMPORTANT, User.balance and idempotent requests object must be a transactional write in YOUR
-//  // database.  `user.balance -= value`` and the request is stored on disk after the `write()` call
-//  const value = Number(request.params.amount.value);
-//  console.log('user balance pre withdraw:', user.balance);
-//  user.balance -= value;
-//  console.log('user balance post withdraw:', user.balance);
-//  const cachedRequest = requestCache.insert(request).write();
-
-//  //Post Request, retrying if we can
-//  const yubiRequestId = await retryRequest(request);
-//  if (yubiRequestId) {
-//    //store the withdrawal response id from YUBI
-//    //when the corresponding event comes back from YUBI, we can mark the entry based on the
-//    //yubi request id.  This lets us know for sure if a response was received
-//    console.log(yubiRequestId);
-//    cachedRequest.yubiRequestId = yubiRequestId;
-//    requestCache.write();
-//  } else {
-//    // #IMPORTANT the balance update and requestCache item must be removed together in
-//    // a transaction!
-//    user.balance += value;
-//    requestCache.removeById(request.id).write();
-//  }
-
-//  return true;
-//}
-
-async function retryRequest(request): Promise<string | undefined> {
+async function retryRequest(
+  url: string,
+  headers: object,
+  payload: any
+): Promise<[string | undefined, boolean]> {
   let retries = 5;
   while (retries > 0) {
     console.log(
-      `idempotent request: ${request.url} params: ${JSON.stringify(
-        request.params,
-        null,
-        2
-      )}`
+      `idempotent request: ${url} payload: ${JSON.stringify(payload, null, 2)}`
     );
     try {
-      let resp = await httpClient.post(request.url, request.params, {
-        headers: { 'Idempotency-Key': request.id },
-      });
+      let resp = await httpClient.post(url, payload, { headers });
       if (resp.status === 202) {
-        return resp.data.processId;
+        return [resp.data.processId, false];
       }
     } catch (e) {
       if (e.response) {
-        console.log(request);
         // request failed due to bad request or server error.  Abort
-        console.log(
-          'Idempotent Bad Request, removing cached request and refunding user:',
-          request.Id
-        );
-        return undefined;
+        console.log('Idempotent Bad Request, Need Revert');
+        return [undefined, true];
       } else if (e.request) {
         // request failed due to timeout.  Could be our network or remote's network or both.
         // it is possible the request arrived or did not arrive, this is retryable
         console.log('Idempotent Timed Out, retrying:', e.request);
         console.log(e.response);
       } else {
-        // this is code level errors like null objects.  In this case, it should be a bad request
-        console.log('Idempotent Request Error:', request.Id);
-        return undefined;
+        // this is code level errors like null objects.  In this case, it should be a failure
+        console.log('Idempotent Request System Error:', e);
+        return [undefined, true];
       }
     }
+
+    // be friendly to the remote api
+    await delay(1000);
+    retries -= 1;
   }
 
-  // be friendly to the remote api
-  await delay(1000);
-  retries -= 1;
-  return undefined;
+  console.log(
+    'Retry count exhausted, request status unknown and cannot revert'
+  );
+  return [undefined, false];
 }
 
 export function delay(ms: number) {
@@ -541,31 +539,31 @@ type EventsRequest = {
   version: string;
 };
 
-type SignedRequest = {
-  id: string;
-  signature: string;
-  payload: string;
+type SignedHeaders = {
+  'X-Subject': string;
+  'X-Signature': string;
+  'X-Algorithm': 'KECCAK-RSA-SHA256';
 };
 
-function createSignedRequest(
+function createSignedHeaders(
   id: string,
-  request: object,
-  privateKey: any
-): SignedRequest {
-  // get the JSON bytes of the request as base64 string
-  const payload = Buffer.from(JSON.stringify(request), 'utf8').toString(
-    'base64'
-  );
-
+  privateKey: any,
+  payload: object
+): object {
   // keccak256 hash the base64 payload, since RSA signature message can only be 222 bytes long
   const hasher = new Keccak(256);
-  hasher.update(payload);
+  hasher.update(JSON.stringify(payload));
   const output = hasher.digest();
 
   // sign the keccak256 hash as a base64 signature
   const signer = crypto.createSign('RSA-SHA256');
   const signature = signer.update(output).sign(privateKey, 'base64');
-  return { id, signature, payload };
+  const headers: SignedHeaders = {
+    'X-Subject': id,
+    'X-Signature': signature,
+    'X-Algorithm': 'KECCAK-RSA-SHA256',
+  };
+  return headers;
 }
 
 async function query_events(eventIndex: string): Promise<any> {
@@ -575,16 +573,15 @@ async function query_events(eventIndex: string): Promise<any> {
       currencyKind: 'Tether',
       version: eventIndex,
     };
-    const signedRequest = createSignedRequest(
+    const headers = createSignedHeaders(
       YUBI_PARTNER_ID,
-      request,
-      RSA_PRIVATE_KEY
+      RSA_PRIVATE_KEY,
+      request
     );
 
-    const resp = await httpClient.post(
-      `${YUBI_API}/partners/events`,
-      signedRequest
-    );
+    const resp = await httpClient.post(`${YUBI_API}/partners/events`, request, {
+      headers,
+    });
     if (resp.status !== 200) {
       console.log(`events query failed with status: ${resp.status}`);
       return;
