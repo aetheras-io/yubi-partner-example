@@ -108,7 +108,6 @@ function UserMenu(props: { user: UserState }) {
                         windowRef = window.open()
                         ;(async () => {
                             const yubiLink = await API.getDepositLink(user.id)
-                            console.log(windowRef)
                             windowRef.location = yubiLink
                             windowRef.name = '_blank'
                         })()
