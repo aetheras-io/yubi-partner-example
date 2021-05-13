@@ -1,6 +1,5 @@
 import express from 'express';
 import crypto from 'crypto';
-import { Keccak } from 'sha3';
 import bodyParser from 'body-parser';
 import low from 'lowdb';
 import fs from 'fs';
@@ -44,6 +43,10 @@ const httpClient = axios.create({
 });
 
 async function main() {
+  const signer = crypto.createSign('RSA-SHA256');
+  const signature = signer.update('helloworld').sign(RSA_PRIVATE_KEY, 'base64');
+  console.log(signature);
+
   const app = express();
   const port = PORT;
   const db = await createDatabase();
@@ -542,7 +545,7 @@ type EventsRequest = {
 type SignedHeaders = {
   'X-Subject': string;
   'X-Signature': string;
-  'X-Algorithm': 'KECCAK-RSA-SHA256';
+  'X-Algorithm': 'RSA-SHA256';
 };
 
 function createSignedHeaders(
@@ -550,18 +553,14 @@ function createSignedHeaders(
   privateKey: any,
   payload: object
 ): object {
-  // keccak256 hash the base64 payload, since RSA signature message can only be 222 bytes long
-  const hasher = new Keccak(256);
-  hasher.update(JSON.stringify(payload));
-  const output = hasher.digest();
-
-  // sign the keccak256 hash as a base64 signature
   const signer = crypto.createSign('RSA-SHA256');
-  const signature = signer.update(output).sign(privateKey, 'base64');
+  const signature = signer
+    .update(JSON.stringify(payload))
+    .sign(privateKey, 'base64');
   const headers: SignedHeaders = {
     'X-Subject': id,
     'X-Signature': signature,
-    'X-Algorithm': 'KECCAK-RSA-SHA256',
+    'X-Algorithm': 'RSA-SHA256',
   };
   return headers;
 }
