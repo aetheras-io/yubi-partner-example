@@ -40,7 +40,7 @@ Yubi Payments URL: ${YUBI_PAYMENTS_URL}
 ===========\n`);
 
 const httpClient = axios.create({
-  baseURL: 'http://localhost:3030',
+  baseURL: YUBI_API,
 });
 
 async function main() {
