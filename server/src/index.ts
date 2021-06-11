@@ -18,9 +18,9 @@ const RSA_PUBLIC_KEY = fs.readFileSync('./public.pem');
 // Aggregate Configuration Variables
 const PARTNER_PLATFORM = 'ABC Corp. Ltd';
 const PORT = process.env.PORT ? process.env.PORT : 3001;
-const YUBI_PARTNER_ID = process.env.PARTNER_ID
-  ? process.env.PARTNER_ID
-  : '10101';
+const YUBI_PARTNER_ID = process.env.YUBI_PARTNER_ID
+  ? process.env.YUBI_PARTNER_ID
+  : 'JANK_10101';
 const YUBI_HOST = process.env.YUBI_HOST
   ? process.env.YUBI_HOST
   : 'http://localhost:3000';
@@ -261,7 +261,7 @@ async function main() {
 }
 
 main()
-  .then((_res) => {})
+  .then((_res) => { })
   .catch(console.error);
 
 // In case of a crash, we get all of the requests without a requestId (due to missing the response
@@ -414,7 +414,8 @@ function jankenMetadata(userId: string) {
 
 function createYubiPaymentLink(userId: string, currency: string): string {
   const metadataURIParams = new URLSearchParams(jankenMetadata(userId));
-  return `${YUBI_PAYMENTS_URL}?currency=${currency}&partner=${YUBI_PARTNER_ID}&${metadataURIParams.toString()}`;
+  const orderId = uuidv4();
+  return `${YUBI_PAYMENTS_URL}?currency=${currency}&partner=${YUBI_PARTNER_ID}&order=${orderId}&${metadataURIParams.toString()}`;
 }
 
 async function createDatabase() {
