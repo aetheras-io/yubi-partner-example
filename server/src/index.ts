@@ -27,7 +27,8 @@ const YUBI_HOST = process.env.YUBI_HOST
 const YUBI_API = process.env.YUBI_API
   ? process.env.YUBI_API
   : 'http://localhost:3030';
-const YUBI_PAYMENTS_URL = `${YUBI_HOST}/payments/partner`;
+const YUBI_PATH = '/payments/partner';
+const YUBI_PAYMENTS_URL = `${YUBI_HOST}${YUBI_PATH}`;
 
 console.log(`
 ===CONFIG===
@@ -415,7 +416,14 @@ function jankenMetadata(userId: string) {
 function createYubiPaymentLink(userId: string, currency: string): string {
   const metadataURIParams = new URLSearchParams(jankenMetadata(userId));
   const orderId = uuidv4();
-  return `${YUBI_PAYMENTS_URL}?currency=${currency}&partner=${YUBI_PARTNER_ID}&order=${orderId}&${metadataURIParams.toString()}`;
+
+  const path = `${YUBI_PATH}?currency=${currency}&partner=${YUBI_PARTNER_ID}&order=${orderId}&${metadataURIParams.toString()}`;
+
+  const signer = crypto.createSign('RSA-SHA256');
+  signer.update(path);
+  const signature = signer.sign(RSA_PRIVATE_KEY, 'base64');
+
+  return `${YUBI_HOST}${path}&sig=${signature}`;
 }
 
 async function createDatabase() {
@@ -593,7 +601,8 @@ async function query_events(eventIndex: string): Promise<any> {
   }
 }
 
-// const request_uri = `/partners/events?partnerId=${YUBI_PARTNER_ID}&currencyKind=Tether&version=${eventIndex}`;
+// const request_uri = `/partners/events?partnerId=${YUBI_PARTNER_ID}&currencyKind=Tether&version=1234`;
+// console.log(`request uri: ${request_uri}`)
 // const signer = crypto.createSign('RSA-SHA256');
 // signer.update(request_uri);
 // const signature = signer.sign(RSA_PRIVATE_KEY, 'base64');
