@@ -144,7 +144,8 @@ async function main() {
 
     const idempotencyKey = uuidv4();
     const payload: OnChain = {
-      idempotencyKey,
+      orderId: idempotencyKey,
+      network: "ERC20",
       address,
       amount: {
         kind: currency,
@@ -304,7 +305,8 @@ type OnYubi = {
 };
 
 type OnChain = {
-  idempotencyKey: string;
+  orderId: string,
+  network: string,
   address: string;
   amount: {
     kind: string;
@@ -521,7 +523,8 @@ function stateUpdateLoop(db) {
               });
             }
             break;
-          case 'Transfered':
+          // case 'Transfered':
+          case 'Withdrawn':
             if (event.metadata !== undefined && event.metadata.userId !== undefined) {
               const user = usersCollection.getById(event.metadata.userId).value();
               // It is up to the system to decide if the requestCache for this transfer event
