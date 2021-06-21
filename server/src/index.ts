@@ -505,29 +505,34 @@ function stateUpdateLoop(db) {
       // console.log(`received ${resp.data.length} events`);
       for (var i = 0; i < data.length; i++) {
         const event = data[i];
-        const user = usersCollection.getById(event.metadata.userId).value();
         console.log(`processing ${event.kind} event`);
         switch (event.kind) {
           case 'Received':
-            // process each event and store the fact
-            user.balance += Number(event.amount.value);
-            user.yubiAccount = event.correlationId;
-            txCollection.push({
-              userId: user.id,
-              kind: 'Deposit',
-              amount: event.amount,
-              at: event.when,
-            });
+            if (event.metadata !== undefined && event.metadata.userId !== undefined) {
+              const user = usersCollection.getById(event.metadata.userId).value();
+              // process each event and store the fact
+              user.balance += Number(event.amount.value);
+              user.yubiAccount = event.correlationId;
+              txCollection.push({
+                userId: user.id,
+                kind: 'Deposit',
+                amount: event.amount,
+                at: event.when,
+              });
+            }
             break;
           case 'Transfered':
-            // It is up to the system to decide if the requestCache for this transfer event
-            // should be deleted
-            txCollection.push({
-              userId: user.id,
-              kind: 'Withdraw',
-              amount: event.amount,
-              at: event.when,
-            });
+            if (event.metadata !== undefined && event.metadata.userId !== undefined) {
+              const user = usersCollection.getById(event.metadata.userId).value();
+              // It is up to the system to decide if the requestCache for this transfer event
+              // should be deleted
+              txCollection.push({
+                userId: user.id,
+                kind: 'Withdraw',
+                amount: event.amount,
+                at: event.when,
+              });
+            }
             break;
         }
         //#NOTE this bigint conversion is needed only because javascript only uses 53bit precision
