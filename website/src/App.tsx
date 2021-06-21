@@ -106,18 +106,18 @@ function UserMenu(props: { user: UserState }) {
                 <button
                     onClick={() => {
                         windowRef = window.open()
-                        ;(async () => {
-                            const yubiLink = await API.getDepositLink(user.id)
-                            windowRef.location = yubiLink
-                            windowRef.name = '_blank'
-                        })()
+                            ; (async () => {
+                                const yubiLink = await API.getDepositLink(user.id)
+                                windowRef.location = yubiLink
+                                windowRef.name = '_blank'
+                            })()
                     }}
                 >
                     Deposit
                 </button>
-                <button disabled={pendingRequest} onClick={sendYubiWithdrawal}>
+                {/* <button disabled={pendingRequest} onClick={sendYubiWithdrawal}>
                     Withdraw Yubi(50)
-                </button>
+                </button> */}
                 <input value={address} onChange={handleAddressChange}></input>
                 <button
                     disabled={pendingRequest || !address}
@@ -138,7 +138,7 @@ function Transactions(props: { user: UserState }) {
     })
 
     useEffect(() => {
-        ;(async () => {
+        ; (async () => {
             setTxState((prev) => ({ ...prev, state: 'sending' }))
             let txns = await API.getTransactions(user.id)
             setTxState((prev) => ({ ...prev, state: 'idle', txns }))
@@ -189,7 +189,7 @@ function UserSelection(props: { setUser: (user: UserState) => void }) {
 
     // load all available users
     useEffect(() => {
-        ;(async () => {
+        ; (async () => {
             if (!state.allUsers) {
                 let users = await API.getAllUsers()
                 setState((prev) => ({ ...prev, allUsers: users }))
@@ -198,7 +198,7 @@ function UserSelection(props: { setUser: (user: UserState) => void }) {
     }, [state, setState])
 
     useEffect(() => {
-        ;(async () => {
+        ; (async () => {
             if (state.selectedUser) {
                 let resp = await API.login(state.selectedUser)
                 setUser(resp)
