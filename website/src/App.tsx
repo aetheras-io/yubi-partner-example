@@ -52,6 +52,7 @@ function UserMenu(props: { user: UserState }) {
     const { user } = props
     const [state, setState] = useState<WithdrawState>('idle')
     const [address, setAddress] = useState<string>('')
+    const [applyAmount, setApplyAmount] = useState<string>('')
 
     const sendYubiWithdrawal = useCallback(async () => {
         if (state === 'idle') {
@@ -94,6 +95,14 @@ function UserMenu(props: { user: UserState }) {
         setAddress(evt.currentTarget.value)
     }
 
+    const handleApplyAmountChange = (evt: any) => {
+        let string_num = evt.currentTarget.value
+        if (string_num.match(/^(\d+\.)?\d*$/)) {
+            console.log("setApplyAmount", string_num)
+            setApplyAmount(string_num)
+        }
+    }
+
     if (!user) {
         return null
     }
@@ -103,11 +112,14 @@ function UserMenu(props: { user: UserState }) {
         <div>
             <p>
                 [{user.username}] Credits: {user.balance} USDT{' '}
+                <br />
+                <span>apply amount: </span>
+                <input value={applyAmount} onChange={handleApplyAmountChange}></input>
                 <button
                     onClick={() => {
                         windowRef = window.open()
                             ; (async () => {
-                                const yubiLink = await API.getDepositLink(user.id)
+                                const yubiLink = await API.getDepositLink(user.id, applyAmount)
                                 windowRef.location = yubiLink
                                 windowRef.name = '_blank'
                             })()
@@ -118,6 +130,8 @@ function UserMenu(props: { user: UserState }) {
                 {/* <button disabled={pendingRequest} onClick={sendYubiWithdrawal}>
                     Withdraw Yubi(50)
                 </button> */}
+                <br />
+                <span>withdraw address: </span>
                 <input value={address} onChange={handleAddressChange}></input>
                 <button
                     disabled={pendingRequest || !address}

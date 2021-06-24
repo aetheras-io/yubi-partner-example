@@ -229,14 +229,14 @@ async function main() {
 
   // Get the YUBI Deposit link
   app.post('/depositLink', (req, res) => {
-    const { userId } = req.body;
+    const { userId, applyAmount } = req.body;
     const user = db.get('users').getById(userId).value();
     if (!user) {
       res.status(400).send('unknown user');
       return;
     }
 
-    res.json(createYubiPaymentLink(userId, 'Tether'));
+    res.json(createYubiPaymentLink(userId, 'Tether', applyAmount));
   });
 
   // Get list of User's Transactions
@@ -415,11 +415,14 @@ function jankenMetadata(userId: string) {
   };
 }
 
-function createYubiPaymentLink(userId: string, currency: string): string {
+function createYubiPaymentLink(userId: string, currency: string, applyAmount: string): string {
   const metadataURIParams = new URLSearchParams(jankenMetadata(userId));
   const orderId = uuidv4();
 
-  const path = `${YUBI_PATH}?currency=${currency}&partner=${YUBI_PARTNER_ID}&order=${orderId}&${metadataURIParams.toString()}`;
+  let path = `${YUBI_PATH}?currency=${currency}&partner=${YUBI_PARTNER_ID}&order=${orderId}&${metadataURIParams.toString()}`;
+  if (applyAmount !== "") {
+    path += `&applyamount=${applyAmount}`
+  }
 
   const signer = crypto.createSign('RSA-SHA256');
   signer.update(path);
