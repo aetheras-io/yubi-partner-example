@@ -115,6 +115,8 @@ function UserMenu(props: { user: UserState }) {
         <div>
             <p>
                 [{user.username}] Credits: {user.balance} USDT{' '}
+                <br />
+                <span>apply amount: </span>
                 <input value={applyAmount} onChange={handleApplyAmountChange}></input>
                 <button
                     onClick={() => {
@@ -131,6 +133,8 @@ function UserMenu(props: { user: UserState }) {
                 {/* <button disabled={pendingRequest} onClick={sendYubiWithdrawal}>
                     Withdraw Yubi(50)
                 </button> */}
+                <br />
+                <span>withdraw address: </span>
                 <input value={address} onChange={handleAddressChange}></input>
                 <button
                     disabled={pendingRequest || !address}
