@@ -97,13 +97,10 @@ function UserMenu(props: { user: UserState }) {
 
     const handleApplyAmountChange = (evt: any) => {
         let string_num = evt.currentTarget.value
-        if (string_num === "") {
-        } else if (!string_num.match(/^(\d+|\d+\.?\d*)$/)) {
-            return
+        if (string_num.match(/^(\d+\.)?\d*$/)) {
+            console.log("setApplyAmount", string_num)
+            setApplyAmount(string_num)
         }
-
-        console.log("setApplyAmount", string_num)
-        setApplyAmount(string_num)
     }
 
     if (!user) {
