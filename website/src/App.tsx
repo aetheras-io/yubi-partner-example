@@ -53,6 +53,7 @@ function UserMenu(props: { user: UserState }) {
     const [state, setState] = useState<WithdrawState>('idle')
     const [address, setAddress] = useState<string>('')
     const [applyAmount, setApplyAmount] = useState<string>('')
+    const [network, setNetwork] = useState('')
 
     const sendYubiWithdrawal = useCallback(async () => {
         if (state === 'idle') {
@@ -119,7 +120,7 @@ function UserMenu(props: { user: UserState }) {
                     onClick={() => {
                         windowRef = window.open()
                             ; (async () => {
-                                const yubiLink = await API.getDepositLink(user.id, applyAmount)
+                                const yubiLink = await API.getDepositLink(user.id, applyAmount, network)
                                 windowRef.location = yubiLink
                                 windowRef.name = '_blank'
                             })()
@@ -127,6 +128,20 @@ function UserMenu(props: { user: UserState }) {
                 >
                     Deposit
                 </button>
+                <br />
+                <br />
+                <button onClick={() => setNetwork('')}>
+                    Not specify network
+                </button>
+                <button onClick={() => setNetwork('TRC20')}>
+                    TRC20
+                </button>
+                <button onClick={() => setNetwork('ERC20')}>
+                    ERC20
+                </button>
+                <span> network: {network}</span>
+                <br />
+                <br />
                 {/* <button disabled={pendingRequest} onClick={sendYubiWithdrawal}>
                     Withdraw Yubi(50)
                 </button> */}

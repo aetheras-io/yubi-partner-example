@@ -137,14 +137,14 @@ export async function getTransactions(userId: string): Promise<Array<any>> {
     return resp.json()
 }
 
-export async function getDepositLink(userId: string, applyAmount: string): Promise<string> {
+export async function getDepositLink(userId: string, applyAmount: string, network: string): Promise<string> {
     const resp = await fetch(`${GAME_API}/depositLink`, {
         method: 'POST',
         headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ userId, applyAmount }),
+        body: JSON.stringify({ userId, applyAmount, network }),
     })
 
     if (!resp.ok) {
