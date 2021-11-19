@@ -53,7 +53,6 @@ function UserMenu(props: { user: UserState }) {
     const [state, setState] = useState<WithdrawState>('idle')
     const [address, setAddress] = useState<string>('')
     const [applyAmount, setApplyAmount] = useState<string>('')
-    const [network, setNetwork] = useState('')
 
     const sendYubiWithdrawal = useCallback(async () => {
         if (state === 'idle') {
@@ -109,6 +108,17 @@ function UserMenu(props: { user: UserState }) {
     }
 
     const pendingRequest = state !== 'idle'
+
+    const getDepositLink = (network: string) => {
+        console.log(network)
+        windowRef = window.open()
+        ; (async () => {
+            const yubiLink = await API.getDepositLink(user.id, applyAmount, network)
+            windowRef.location = yubiLink
+            windowRef.name = '_blank'
+        })()
+    }
+
     return (
         <div>
             <p>
@@ -116,32 +126,15 @@ function UserMenu(props: { user: UserState }) {
                 <br />
                 <span>apply amount: </span>
                 <input value={applyAmount} onChange={handleApplyAmountChange}></input>
-                <button
-                    onClick={() => {
-                        windowRef = window.open()
-                            ; (async () => {
-                                const yubiLink = await API.getDepositLink(user.id, applyAmount, network)
-                                windowRef.location = yubiLink
-                                windowRef.name = '_blank'
-                            })()
-                    }}
-                >
+                <button onClick={() => getDepositLink('')}>
                     Deposit
                 </button>
-                <br />
-                <br />
-                <button onClick={() => setNetwork('')}>
-                    Not specify network
+                <button onClick={() => getDepositLink('TRC20')}>
+                    Deposit TRC20
                 </button>
-                <button onClick={() => setNetwork('TRC20')}>
-                    TRC20
+                <button onClick={() => getDepositLink('ERC20')}>
+                    Deposit ERC20
                 </button>
-                <button onClick={() => setNetwork('ERC20')}>
-                    ERC20
-                </button>
-                <span> network: {network}</span>
-                <br />
-                <br />
                 {/* <button disabled={pendingRequest} onClick={sendYubiWithdrawal}>
                     Withdraw Yubi(50)
                 </button> */}
