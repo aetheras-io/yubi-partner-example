@@ -108,6 +108,17 @@ function UserMenu(props: { user: UserState }) {
     }
 
     const pendingRequest = state !== 'idle'
+
+    const getDepositLink = (network: string) => {
+        console.log(network)
+        windowRef = window.open()
+        ; (async () => {
+            const yubiLink = await API.getDepositLink(user.id, applyAmount, network)
+            windowRef.location = yubiLink
+            windowRef.name = '_blank'
+        })()
+    }
+
     return (
         <div>
             <p>
@@ -115,17 +126,14 @@ function UserMenu(props: { user: UserState }) {
                 <br />
                 <span>apply amount: </span>
                 <input value={applyAmount} onChange={handleApplyAmountChange}></input>
-                <button
-                    onClick={() => {
-                        windowRef = window.open()
-                            ; (async () => {
-                                const yubiLink = await API.getDepositLink(user.id, applyAmount)
-                                windowRef.location = yubiLink
-                                windowRef.name = '_blank'
-                            })()
-                    }}
-                >
+                <button onClick={() => getDepositLink('')}>
                     Deposit
+                </button>
+                <button onClick={() => getDepositLink('TRC20')}>
+                    Deposit TRC20
+                </button>
+                <button onClick={() => getDepositLink('ERC20')}>
+                    Deposit ERC20
                 </button>
                 {/* <button disabled={pendingRequest} onClick={sendYubiWithdrawal}>
                     Withdraw Yubi(50)

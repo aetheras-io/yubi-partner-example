@@ -229,14 +229,14 @@ async function main() {
 
   // Get the YUBI Deposit link
   app.post('/depositLink', (req, res) => {
-    const { userId, applyAmount } = req.body;
+    const { userId, applyAmount, network } = req.body;
     const user = db.get('users').getById(userId).value();
     if (!user) {
       res.status(400).send('unknown user');
       return;
     }
 
-    res.json(createYubiPaymentLink(userId, 'Tether', applyAmount));
+    res.json(createYubiPaymentLink(userId, 'Tether', applyAmount, network));
   });
 
   // Get list of User's Transactions
@@ -415,11 +415,13 @@ function jankenMetadata(userId: string) {
   };
 }
 
-function createYubiPaymentLink(userId: string, currency: string, applyAmount: string): string {
+function createYubiPaymentLink(userId: string, currency: string, applyAmount: string, network: string): string {
   const metadataURIParams = new URLSearchParams(jankenMetadata(userId));
   const orderId = uuidv4();
 
-  let path = `${YUBI_PATH}?currency=${currency}&partner=${YUBI_PARTNER_ID}&order=${orderId}&${metadataURIParams.toString()}`;
+  let path = network ? 
+    `${YUBI_PATH}?currency=${currency}&partner=${YUBI_PARTNER_ID}&network=${network}&order=${orderId}&${metadataURIParams.toString()}` 
+      : `${YUBI_PATH}?currency=${currency}&partner=${YUBI_PARTNER_ID}&order=${orderId}&${metadataURIParams.toString()}`;
   if (applyAmount !== "") {
     path += `&applyamount=${applyAmount}`
   }
