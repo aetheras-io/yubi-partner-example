@@ -72,12 +72,12 @@ function UserMenu(props: { user: UserState }) {
         }
     }, [user, state, setState])
 
-    const sendChainWithdrawal = useCallback(async () => {
+    const sendChainWithdrawal = useCallback(async (network: string) => {
         if (state === 'idle' && address) {
             setState('sending')
             try {
                 await API.delay(1000)
-                await API.withdrawOnChain(user.id, address, 'Tether', 50)
+                await API.withdrawOnChain(user.id, address, 'Tether', 50, network)
                 alert('Withdrawal Chain Request of $50 USDT accepted')
                 setState('idle')
             } catch (e) {
@@ -143,9 +143,15 @@ function UserMenu(props: { user: UserState }) {
                 <input value={address} onChange={handleAddressChange}></input>
                 <button
                     disabled={pendingRequest || !address}
-                    onClick={sendChainWithdrawal}
+                    onClick={() => sendChainWithdrawal('TRC20')}
                 >
-                    Withdraw Chain(50)
+                    Withdraw TRC20(50)
+                </button>
+                <button
+                    disabled={pendingRequest || !address}
+                    onClick={() => sendChainWithdrawal('ERC20')}
+                >
+                    Withdraw ERC20(50)
                 </button>
             </p>
         </div>
