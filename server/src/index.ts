@@ -126,7 +126,7 @@ async function main() {
 
   // Withdraw funds to Chain as User
   app.post('/withdrawOnChain', async (req, res) => {
-    const { userId, currency, value, address } = req.body;
+    const { userId, currency, value, address, network } = req.body;
     const userCollection = db.get('users');
     let user = userCollection.getById(userId).value();
     if (!user) {
@@ -145,7 +145,7 @@ async function main() {
     const idempotencyKey = uuidv4();
     const payload: OnChain = {
       orderId: idempotencyKey,
-      network: "ERC20",
+      network: network,
       address,
       amount: {
         kind: currency,
