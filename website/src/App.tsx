@@ -53,7 +53,7 @@ function UserMenu(props: { user: UserState }) {
     const [state, setState] = useState<WithdrawState>('idle')
     const [address, setAddress] = useState<string>('')
     const [applyAmount, setApplyAmount] = useState<string>('')
-    const [withdrawAmount, setWithdrawAmount] = useState<number>(50)
+    const [withdrawAmount, setWithdrawAmount] = useState<string>('50')
 
     const sendYubiWithdrawal = useCallback(async () => {
         if (state === 'idle') {
@@ -78,7 +78,7 @@ function UserMenu(props: { user: UserState }) {
             setState('sending')
             try {
                 await API.delay(1000)
-                await API.withdrawOnChain(user.id, address, 'Tether', withdrawAmount, network)
+                await API.withdrawOnChain(user.id, address, 'Tether', +withdrawAmount, network)
                 alert(`Withdrawal Chain Request of ${withdrawAmount} USDT accepted`)
                 setState('idle')
             } catch (e) {
@@ -108,7 +108,7 @@ function UserMenu(props: { user: UserState }) {
         let string_num = evt.currentTarget.value
         if (string_num.match(/^(\d+\.)?\d*$/)) {
             console.log("withdrawAmount", string_num)
-            setWithdrawAmount(+string_num)
+            setWithdrawAmount(string_num)
         }
     }
 
@@ -119,7 +119,6 @@ function UserMenu(props: { user: UserState }) {
     const pendingRequest = state !== 'idle'
 
     const getDepositLink = (network: string) => {
-        console.log(network)
         windowRef = window.open()
         ; (async () => {
             const yubiLink = await API.getDepositLink(user.id, applyAmount, network)
