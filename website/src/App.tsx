@@ -53,7 +53,7 @@ function UserMenu(props: { user: UserState }) {
     const [state, setState] = useState<WithdrawState>('idle')
     const [address, setAddress] = useState<string>('')
     const [applyAmount, setApplyAmount] = useState<string>('')
-    const [withdrawAmount, setWithdrawAmount] = useState<number>(50)
+    const [withdrawAmount, setWithdrawAmount] = useState<string>('50')
 
     const sendYubiWithdrawal = useCallback(async () => {
         if (state === 'idle') {
@@ -78,7 +78,7 @@ function UserMenu(props: { user: UserState }) {
             setState('sending')
             try {
                 await API.delay(1000)
-                await API.withdrawOnChain(user.id, address, 'Tether', withdrawAmount, network)
+                await API.withdrawOnChain(user.id, address, 'Tether', +withdrawAmount, network)
                 alert(`Withdrawal Chain Request of ${withdrawAmount} USDT accepted`)
                 setState('idle')
             } catch (e) {
@@ -108,7 +108,7 @@ function UserMenu(props: { user: UserState }) {
         let string_num = evt.currentTarget.value
         if (string_num.match(/^(\d+\.)?\d*$/)) {
             console.log("withdrawAmount", string_num)
-            setWithdrawAmount(+string_num)
+            setWithdrawAmount(string_num)
         }
     }
 
@@ -130,45 +130,43 @@ function UserMenu(props: { user: UserState }) {
 
     return (
         <div>
-            <p>
-                [{user.username}] Credits: {user.balance} USDT{' '}
-                <br />
-                <span>apply amount: </span>
-                <input value={applyAmount} onChange={handleApplyAmountChange}></input>
-                <button onClick={() => getDepositLink('')}>
-                    Deposit
-                </button>
-                <button onClick={() => getDepositLink('TRC20')}>
-                    Deposit TRC20
-                </button>
-                <button onClick={() => getDepositLink('ERC20')}>
-                    Deposit ERC20
-                </button>
-                {/* <button disabled={pendingRequest} onClick={sendYubiWithdrawal}>
-                    Withdraw Yubi(50)
-                </button> */}
-                <br />
-                <br />
-                <span>withdraw address: </span>
-                <input value={address} onChange={handleAddressChange}></input>
-                <br />
-                <div style={{ marginLeft: '74px' }}>
-                    <span>amount: </span>
-                    <input value={withdrawAmount} onChange={handleWithdrawAmountChange}></input>
-                </div>
-                <button
-                    disabled={pendingRequest || !address}
-                    onClick={() => sendChainWithdrawal('TRC20')}
-                >
-                    TRC20
-                </button>
-                <button
-                    disabled={pendingRequest || !address}
-                    onClick={() => sendChainWithdrawal('ERC20')}
-                >
-                    ERC20
-                </button>
-            </p>
+            [{user.username}] Credits: {user.balance} USDT{' '}
+            <br />
+            <span>apply amount: </span>
+            <input value={applyAmount} onChange={handleApplyAmountChange}></input>
+            <button onClick={() => getDepositLink('')}>
+                Deposit
+            </button>
+            <button onClick={() => getDepositLink('TRC20')}>
+                Deposit TRC20
+            </button>
+            <button onClick={() => getDepositLink('ERC20')}>
+                Deposit ERC20
+            </button>
+            {/* <button disabled={pendingRequest} onClick={sendYubiWithdrawal}>
+                Withdraw Yubi(50)
+            </button> */}
+            <br />
+            <br />
+            <span>withdraw address: </span>
+            <input value={address} onChange={handleAddressChange}></input>
+            <br />
+            <div style={{ marginLeft: '74px' }}>
+                <span>amount: </span>
+                <input value={withdrawAmount} onChange={handleWithdrawAmountChange}></input>
+            </div>
+            <button
+                disabled={pendingRequest || !address}
+                onClick={() => sendChainWithdrawal('TRC20')}
+            >
+                TRC20
+            </button>
+            <button
+                disabled={pendingRequest || !address}
+                onClick={() => sendChainWithdrawal('ERC20')}
+            >
+                ERC20
+            </button>
         </div>
     )
 }
