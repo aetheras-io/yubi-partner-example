@@ -372,7 +372,7 @@ async function retryRequest(
     try {
       let resp = await httpClient.post(url, payload, { headers });
       if (resp.status === 202) {
-        return [resp.data.processId, false];
+        return [resp.data.systemId, false];
       }
     } catch (e) {
       if (e.response) {
