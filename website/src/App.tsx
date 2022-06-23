@@ -119,7 +119,6 @@ function UserMenu(props: { user: UserState }) {
     const pendingRequest = state !== 'idle'
 
     const getDepositLink = (network: string) => {
-        console.log(network)
         windowRef = window.open()
         ; (async () => {
             const yubiLink = await API.getDepositLink(user.id, applyAmount, network)
