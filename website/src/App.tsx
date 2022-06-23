@@ -89,7 +89,7 @@ function UserMenu(props: { user: UserState }) {
         } else {
             console.log('withdraw request in flight')
         }
-    }, [user, state, setState, address])
+    }, [user, state, setState, address, withdrawAmount])
 
     const handleAddressChange = (evt: any) => {
         console.log(evt.currentTarget.value)
@@ -119,7 +119,6 @@ function UserMenu(props: { user: UserState }) {
     const pendingRequest = state !== 'idle'
 
     const getDepositLink = (network: string) => {
-        console.log(network)
         windowRef = window.open()
         ; (async () => {
             const yubiLink = await API.getDepositLink(user.id, applyAmount, network)
